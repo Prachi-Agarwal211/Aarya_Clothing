@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: aarya_clothing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aarya_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - aarya_network
+
+  # Full-stack application (Frontend + Backend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/aarya_clothing
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: your-secret-key-here-change-in-production
+      ENVIRONMENT: production
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - aarya_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  aarya_network:
+    driver: bridge
