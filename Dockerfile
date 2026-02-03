@@ -17,7 +17,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Backend stage
-FROM python:3.11-slim AS backend
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app

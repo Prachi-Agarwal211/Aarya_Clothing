@@ -23,10 +23,10 @@ services:
     networks:
       - aarya_network
 
-  # Backend FastAPI
-  backend:
+  # Full-stack application (Frontend + Backend)
+  app:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
@@ -34,31 +34,16 @@ services:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/aarya_clothing
       REDIS_URL: redis://redis:6379
       SECRET_KEY: your-secret-key-here-change-in-production
-      ENVIRONMENT: development
+      ENVIRONMENT: production
+      NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
       - postgres
       - redis
     volumes:
-      - ./backend:/app
+      - .:/app
     networks:
       - aarya_network
-
-  # Frontend Next.js
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    networks:
-      - aarya_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
