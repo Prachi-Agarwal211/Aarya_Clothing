@@ -1,507 +1,822 @@
-# Aarya Clothing - Real-time Microservices Architecture
+# Aarya Clothing - Production-Optimized Microservices Architecture
 
-## Overview
-Real-time e-commerce platform with event-driven microservices, search capabilities, and distributed data management.
+## Executive Summary
 
-## Microservices Architecture
+This document outlines the production-optimized architecture for Aarya Clothing, designed for a single 16GB VPS with horizontal scaling capabilities for future growth. Key optimizations include service consolidation, resilience engineering, and IPC efficiency improvements.
 
-### 1. Frontend Service (Next.js)
+---
+
+## 1. Service Consolidation Strategy
+
+### 1.1 Merged Services (Modular Monolith Approach)
+
+For single-node efficiency, we've consolidated related microservices while maintaining logical separation:
+
 ```
-Frontend Service
-├── Port: 3000
-├── Real-time Features:
-│   ├── WebSocket connections
-│   ├── Server-Sent Events (SSE)
-│   ├── Live inventory updates
-│   ├── Real-time order tracking
-│   └── Live chat support
-├── Technologies:
-│   ├── Next.js 14
-│   ├── Socket.io-client
-│   ├── SWR for real-time data
-│   └── React Query
-└── Connections:
-    ├── API Gateway (REST/WebSocket)
-    └── Direct WebSocket to services
-```
-
-### 2. API Gateway
-```
-API Gateway Service
-├── Port: 8080
-├── Responsibilities:
-│   ├── Route management
-│   ├── Authentication/Authorization
-│   ├── Rate limiting
-│   ├── Load balancing
-│   ├── WebSocket proxy
-│   └── Request transformation
-├── Real-time Features:
-│   ├── WebSocket connection management
-│   ├── SSE streaming
-│   └── Event broadcasting
-└── Technologies:
-    ├── FastAPI + WebSockets
-    ├── Nginx/Traefik
-    └── Redis for session storage
+Merged Service Architecture:
+├── Core Platform Service (Ports 8001-8003)
+│   ├── User Service (logical)
+│   ├── Auth Service (logical)
+│   └── Session Service (logical)
+│
+├── Commerce Service (Ports 8010-8012)
+│   ├── Product Service (logical)
+│   ├── Inventory Service (logical)
+│   ├── Cart Service (logical)
+│   └── Order Service (logical)
+│
+├── Payment Service (Port 8020)
+│   ├── Payment Processing
+│   └── Fraud Detection
+│
+├── Content Services (Ports 8030-8031)
+│   ├── Notification Service (logical)
+│   └── Analytics Service (logical)
+│
+├── Search & Discovery (Port 8040)
+│   ├── Search Service (logical)
+│   └── Recommendation Service (logical)
+│
+└── API Gateway (Port 8080)
+    ├── Routing
+    ├── Rate Limiting
+    └── WebSocket Management
 ```
 
-### 3. User Service
-```
-User Service
-├── Port: 8001
-├── Database: PostgreSQL (users_db)
-├── Cache: Redis (user sessions, profiles)
-├── Real-time Features:
-│   ├── Online status tracking
-│   ├── Profile updates broadcasting
-│   ├── Activity feeds
-│   └── Real-time notifications
-├── Tables:
-│   ├── users (id, email, username, full_name, avatar, is_online, last_seen)
-│   ├── user_profiles (user_id, bio, preferences, settings)
-│   ├── user_sessions (session_id, user_id, device, last_activity)
-│   ├── user_activities (id, user_id, activity_type, timestamp, metadata)
-│   └── user_social (user_id, followers, following, blocked)
-├── Events:
-│   ├── user.created
-│   ├── user.updated
-│   ├── user.online
-│   ├── user.offline
-│   └── user.activity
-└── Connections:
-    ├── Redis Streams (events)
-    ├── PostgreSQL (data)
-    └── Elasticsearch (search indexing)
-```
+### 1.2 Service Merge Rationale
 
-### 4. Product Service
+| Original Services | Merged Into | Rationale |
+|-----------------|-------------|-----------|
+| User + Auth + Session | Core Platform | Tight coupling, shared data access patterns |
+| Product + Inventory + Cart + Order | Commerce | E-commerce transaction pipeline |
+| Notification + Analytics | Content Services | Both are event consumers, write-heavy |
+| Search + Recommendation | Search & Discovery | Share indexing infrastructure, complementary queries |
+| Payment (standalone) | Payment Service | PCI compliance isolation, security boundary |
+
+---
+
+## 2. Network Architecture
+
+### 2.1 Communication Patterns
+
 ```
-Product Service
-├── Port: 8002
-├── Database: PostgreSQL (products_db)
-├── Search: Elasticsearch (product_search)
-├── Cache: Redis (product cache, inventory)
-├── Real-time Features:
-│   ├── Live inventory updates
-│   ├── Price change notifications
-│   ├── Product view tracking
-│   ├── Stock alerts
-│   └── Recommendation updates
-├── Tables:
-│   ├── products (id, name, description, price, category_id, brand_id, is_active)
-│   ├── product_variants (id, product_id, size, color, sku, inventory_count)
-│   ├── product_images (id, product_id, image_url, is_primary)
-│   ├── categories (id, name, parent_id, description, is_active)
-│   ├── brands (id, name, logo_url, description)
-│   ├── product_reviews (id, product_id, user_id, rating, review, created_at)
-│   ├── product_view_history (id, product_id, user_id, viewed_at)
-│   └── inventory_logs (id, product_id, old_quantity, new_quantity, reason)
-├── Events:
-│   ├── product.created
-│   ├── product.updated
-│   ├── product.inventory.updated
-│   ├── product.viewed
-│   └── product.reviewed
-└── Connections:
-    ├── Redis Streams (events)
-    ├── PostgreSQL (data)
-    ├── Elasticsearch (search)
-    └── Redis Cache (performance)
+Frontend (Next.js:3000)
+    │
+    ▼
+┌─────────────────────────────────────┐
+│         API Gateway (8080)          │
+│  ├── REST → External APIs           │
+│  ├── WebSocket → Real-time          │
+│  └── gRPC → Internal Services       │
+└─────────────────────────────────────┘
+    │
+    ├── TCP (localhost) → Core Platform
+    ├── TCP (localhost) → Commerce
+    ├── TCP (localhost) → Payment
+    ├── TCP (localhost) → Content Services
+    └── TCP (localhost) → Search & Discovery
 ```
 
-### 5. Order Service
+### 2.2 Unix Domain Sockets (Internal Only)
+
+For maximum performance, internal service-to-service communication uses Unix domain sockets:
+
 ```
-Order Service
-├── Port: 8003
-├── Database: PostgreSQL (orders_db)
-├── Cache: Redis (order cache, cart sessions)
-├── Real-time Features:
-│   ├── Real-time order tracking
-│   ├── Order status updates
-│   ├── Delivery tracking
-│   └── Order notifications
-├── Tables:
-│   ├── orders (id, user_id, total_amount, status, shipping_address, created_at)
-│   ├── order_items (id, order_id, product_id, quantity, price, variant_id)
-│   ├── order_status_history (id, order_id, status, timestamp, notes)
-│   ├── shipping_addresses (id, user_id, address_line1, city, state, postal_code)
-│   ├── order_tracking (id, order_id, tracking_number, current_location, estimated_delivery)
-│   └── abandoned_carts (id, user_id, items, total_amount, abandoned_at)
-├── Events:
-│   ├── order.created
-│   ├── order.status.updated
-│   ├── order.payment.completed
-│   ├── order.shipped
-│   └── cart.abandoned
-└── Connections:
-    ├── Redis Streams (events)
-    ├── PostgreSQL (data)
-    └── Payment Service (integration)
+Internal Socket Paths:
+├── /var/run/aarya/core.sock      → Core Platform Service
+├── /var/run/aarya/commerce.sock  → Commerce Service
+├── /var/run/aarya/payment.sock   → Payment Service
+├── /var/run/aarya/content.sock   → Content Services
+└── /var/run/aarya/search.sock    → Search & Discovery
 ```
 
-### 6. Payment Service
-```
-Payment Service
-├── Port: 8004
-├── Database: PostgreSQL (payments_db)
-├── Cache: Redis (payment sessions)
-├── Real-time Features:
-│   ├── Real-time payment processing
-│   ├── Payment status updates
-│   ├── Fraud detection alerts
-│   └── Refund processing
-├── Tables:
-│   ├── payments (id, order_id, amount, status, payment_method, gateway_response)
-│   ├── payment_methods (id, user_id, type, provider, is_default, token)
-│   ├── refunds (id, payment_id, amount, status, reason, processed_at)
-│   ├── payment_attempts (id, payment_id, attempt_number, status, gateway_response)
-│   └── fraud_flags (id, payment_id, risk_score, flags, resolved)
-├── Events:
-│   ├── payment.initiated
-│   ├── payment.completed
-│   ├── payment.failed
-│   ├── refund.processed
-│   └── fraud.detected
-└── Connections:
-    ├── Redis Streams (events)
-    ├── PostgreSQL (data)
-    └── External Payment Gateways
-```
+**Benefits:**
+- 20-30% latency reduction vs TCP
+- Zero packet routing overhead
+- Reduced kernel context switching
 
-### 7. Cart Service
+### 2.3 gRPC for Internal Communication
+
+For high-throughput internal calls, use gRPC with Protocol Buffers:
+
 ```
-Cart Service
-├── Port: 8006
-├── Database: Redis (cart storage)
-├── Cache: Redis (cart cache)
-├── Real-time Features:
-│   ├── Real-time cart updates
-│   ├── Cross-device cart sync
-│   ├── Cart abandonment tracking
-│   └── Live inventory checking
-├── Data Structure (Redis):
-│   ├── cart:{user_id} (Hash) - cart items
-│   ├── cart:session:{session_id} (Hash) - guest cart
-│   ├── cart:analytics (Stream) - cart events
-│   └── inventory:lock (Set) - temporary inventory locks
-├── Events:
-│   ├── cart.updated
-│   ├── cart.item_added
-│   ├── cart.item_removed
-│   └── cart.abandoned
-└── Connections:
-    ├── Redis Streams (events)
-    ├── Redis Storage (data)
-    └── Product Service (inventory)
+gRPC Service Definitions:
+├── core.proto
+│   ├── GetUser(id) → User
+│   ├── GetSession(id) → Session
+│   └── ValidateToken(token) → ValidationResult
+│
+├── commerce.proto
+│   ├── GetProduct(id) → Product
+│   ├── UpdateInventory(request) → InventoryUpdate
+│   ├── CreateOrder(request) → Order
+│   └── AddToCart(request) → CartItem
+│
+├── payment.proto
+│   ├── ProcessPayment(request) → PaymentResult
+│   ├── RefundPayment(request) → RefundResult
+│   └── CheckFraud(request) → FraudAssessment
+│
+└── search.proto
+    ├── SearchProducts(query) → ProductResults
+    └── GetRecommendations(user_id) → RecommendedProducts
 ```
 
-### 8. Notification Service
-```
-Notification Service
-├── Port: 8005
-├── Database: PostgreSQL (notifications_db)
-├── Queue: Redis (notification queue)
-├── Real-time Features:
-│   ├── Real-time push notifications
-│   ├── Email notifications
-│   ├── SMS notifications
-│   ├── In-app notifications
-│   └── WebSocket notifications
-├── Tables:
-│   ├── notifications (id, user_id, type, title, message, is_read, created_at)
-│   ├── notification_templates (id, name, subject, body_html, body_text)
-│   ├── notification_preferences (user_id, email_enabled, sms_enabled, push_enabled)
-│   ├── email_logs (id, to, subject, status, sent_at, error_message)
-│   └── sms_logs (id, phone_number, message, status, sent_at, error_message)
-├── Events:
-│   ├── notification.email
-│   ├── notification.sms
-│   ├── notification.push
-│   └── notification.in_app
-└── Connections:
-    ├── Redis Streams (events)
-    ├── PostgreSQL (data)
-    └── External Services (Email/SMS providers)
+---
+
+## 3. Database Architecture
+
+### 3.1 PostgreSQL Optimization
+
+#### WAL Separation Configuration
+
+```sql
+-- PostgreSQL postgresql.conf optimizations
+wal_level = replica
+max_wal_size = 2GB
+min_wal_size = 512MB
+checkpoint_completion_target = 0.9
+wal_compression = on
+effective_io_concurrency = 200  # For SSD/NVMe
+random_page_cost = 1.1  # For SSD/NVMe
+
+-- Connection pooling
+max_connections = 200
+shared_buffers = 4GB  # 25% of RAM
+work_mem = 64MB
+maintenance_work_mem = 1GB
 ```
 
-### 9. Search Service
+#### Read/Write Splitting
+
 ```
-Search Service
-├── Port: 8007
-├── Search Engine: Elasticsearch
-├── Cache: Redis (search cache)
-├── Real-time Features:
-│   ├── Real-time search indexing
-│   ├── Auto-complete suggestions
-│   ├── Search analytics
-│   └── Personalized search results
-├── Elasticsearch Indices:
-│   ├── products (name, description, category, brand, price, attributes)
-│   ├── users (username, full_name, bio, location)
-│   ├── orders (order_id, user_id, status, products)
-│   └── search_suggestions (query, frequency, category)
-├── Tables (PostgreSQL):
-│   ├── search_queries (id, user_id, query, results_count, timestamp)
-│   ├── search_analytics (id, query, filters, results, clicked_result)
-│   └── search_trends (id, query, frequency, date)
-├── Events:
-│   ├── search.query
-│   ├── search.result.clicked
-│   └── search.index.updated
-└── Connections:
-    ├── Elasticsearch (search)
-    ├── Redis Cache (performance)
-    └── PostgreSQL (analytics)
+Database Access Pattern:
+┌─────────────────────────────────────┐
+│         Application Layer            │
+│  ├── Writes → Primary Connection     │
+│  └── Reads  → Read Replica(s)        │
+└─────────────────────────────────────┘
+              │
+    ┌─────────┴─────────┐
+    ▼                   ▼
+┌─────────┐      ┌─────────────┐
+│ Primary │      │   Replica   │
+│ (write) │ ───► │ (read only) │
+└─────────┘      └─────────────┘
 ```
 
-### 10. Analytics Service
-```
-Analytics Service
-├── Port: 8008
-├── Database: PostgreSQL (analytics_db)
-├── Time Series: InfluxDB (metrics)
-├── Cache: Redis (aggregated data)
-├── Real-time Features:
-│   ├── Real-time analytics dashboard
-│   ├── Live sales tracking
-│   ├── User behavior analytics
-│   └── Performance metrics
-├── Tables:
-│   ├── page_views (id, user_id, page, timestamp, session_id)
-│   ├── user_events (id, user_id, event_type, properties, timestamp)
-│   ├── sales_metrics (id, date, total_sales, order_count, avg_order_value)
-│   ├── product_metrics (id, product_id, views, add_to_carts, purchases)
-│   └── user_sessions (id, user_id, session_id, start_time, end_time, pages_visited)
-├── Events:
-│   ├── analytics.page_view
-│   ├── analytics.user_event
-│   ├── analytics.sale
-│   └── analytics.conversion
-└── Connections:
-    ├── Redis Streams (events)
-    ├── PostgreSQL (analytics data)
-    └── InfluxDB (time series)
+**Implementation:**
+```python
+# Database router configuration
+DATABASE_ROUTERS = ['core.db.ReadReplicaRouter']
+
+class ReadReplicaRouter:
+    def db_for_read(self, model, **hints):
+        return 'replica'
+    
+    def db_for_write(self, model, **hints):
+        return 'default'
 ```
 
-### 11. Recommendation Service
+### 3.2 Redis Optimization
+
+#### Keyspace Isolation with Eviction Policies
+
 ```
-Recommendation Service
-├── Port: 8009
-├── Database: PostgreSQL (recommendations_db)
-├── Cache: Redis (recommendation cache)
-├── ML: Python/Scikit-learn
-├── Real-time Features:
-│   ├── Real-time product recommendations
-│   ├── Personalized content
-│   ├── Collaborative filtering
-│   └── Content-based filtering
-├── Tables:
-│   ├── user_preferences (user_id, category_preferences, brand_preferences)
-│   ├── product_recommendations (user_id, product_id, score, reason)
-│   ├── user_interactions (user_id, product_id, interaction_type, timestamp)
-│   ├── recommendation_models (id, name, version, accuracy, is_active)
-│   └── recommendation_feedback (user_id, product_id, recommended, clicked, purchased)
-├── Events:
-│   ├── recommendation.generated
-│   ├── recommendation.clicked
-│   └── recommendation.purchased
-└── Connections:
-    ├── Redis Streams (events)
-    ├── PostgreSQL (data)
-    └── ML Models (recommendations)
+Redis Namespaces & Policies:
+┌────────────────────────────────────────────────────────┐
+│ Redis Instance                                          │
+├────────────────────────────────────────────────────────┤
+│ │ Namespace        │ Pattern          │ Policy         │
+├────────────────────────────────────────────────────────┤
+│ │ cache:          │ cache:{key}      │ volatile-lru   │
+│ │ session:        │ session:{id}     │ noeviction     │
+│ │ cart:           │ cart:{user_id}   │ noeviction     │
+│ │ stream:         │ stream:*         │ noeviction     │
+│ │ lock:           │ lock:{name}      │ volatile-ttl   │
+│ │ metrics:        │ metrics:{name}   │ allkeys-lru    │
+└────────────────────────────────────────────────────────┘
 ```
 
-## Event Bus Architecture
+**Redis Configuration (redis.conf):**
+```conf
+# Memory management
+maxmemory 8gb
+maxmemory-policy noeviction
 
-### Redis Streams Configuration
-```
-Event Streams:
-├── user_events (user service events)
-├── product_events (product service events)
-├── order_events (order service events)
-├── payment_events (payment service events)
-├── notification_events (notification service events)
-├── cart_events (cart service events)
-├── search_events (search service events)
-├── analytics_events (analytics service events)
-└── recommendation_events (recommendation service events)
+# Persistence
+save 900 1
+save 300 10
+save 60 10000
+appendonly yes
+appendfsync everysec
 
-Consumer Groups:
-├── notification_consumer (notification service)
-├── analytics_consumer (analytics service)
-├── search_consumer (search service)
-├── recommendation_consumer (recommendation service)
-└── audit_consumer (audit logging)
+# Performance
+tcp-keepalive 300
+timeout 0
+tcp-backlog 511
 ```
 
-## Database Architecture
+---
 
-### PostgreSQL Clusters
+## 4. Event Pipeline Architecture
+
+### 4.1 Redis Streams with TTL and Compaction
+
 ```
-users_db:
-├── users
-├── user_profiles
-├── user_sessions
-├── user_activities
-└── user_social
-
-products_db:
-├── products
-├── product_variants
-├── product_images
-├── categories
-├── brands
-├── product_reviews
-├── product_view_history
-└── inventory_logs
-
-orders_db:
-├── orders
-├── order_items
-├── order_status_history
-├── shipping_addresses
-├── order_tracking
-└── abandoned_carts
-
-payments_db:
-├── payments
-├── payment_methods
-├── refunds
-├── payment_attempts
-└── fraud_flags
-
-notifications_db:
-├── notifications
-├── notification_templates
-├── notification_preferences
-├── email_logs
-└── sms_logs
-
-analytics_db:
-├── page_views
-├── user_events
-├── sales_metrics
-├── product_metrics
-└── user_sessions
-
-recommendations_db:
-├── user_preferences
-├── product_recommendations
-├── user_interactions
-├── recommendation_models
-└── recommendation_feedback
+Event Stream Architecture:
+┌──────────────────────────────────────────────────────────┐
+│ Event Producers                                           │
+│ ├── Core Platform Service                                │
+│ ├── Commerce Service                                     │
+│ ├── Payment Service                                      │
+│ └── Content Services                                     │
+└──────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ Redis Streams (with Consumer Groups)                     │
+│ ┌─────────────────┬───────────────┬─────────────────┐    │
+│ │ Stream Name     │ Max Length    │ Retention       │    │
+│ ├─────────────────┼───────────────┼─────────────────┤    │
+│ │ user_events     │ 100,000       │ 24 hours        │    │
+│ │ product_events  │ 100,000       │ 24 hours        │    │
+│ │ order_events    │ 50,000        │ 7 days          │    │
+│ │ payment_events  │ 50,000        │ 30 days         │    │
+│ │ analytics       │ 1,000,000     │ 1 hour          │    │
+│ │ notifications   │ 100,000       │ 7 days          │    │
+│ └─────────────────┴───────────────┴─────────────────┘    │
+└──────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ Background Compactor (Cron Job)                          │
+│ ├── Batch read stream events                             │
+│ ├── Aggregate/Compress                                    │
+│ ├── Archive to PostgreSQL                                 │
+│ └── Delete compacted events from stream                   │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### Elasticsearch Indices
-```
-products_index:
-├── Product name and description
-├── Category and brand information
-├── Price and availability
-├── Product attributes
-└── Search relevance scoring
+### 4.2 Event Compaction Strategy
 
-users_index:
-├── User profiles
-├── User preferences
-├── Location data
-└── Social connections
-
-orders_index:
-├── Order information
-├── Order status
-├── Product details
-└── Customer information
-```
-
-### Redis Data Structure
-```
-Cache Layer:
-├── user:{id} (Hash) - User profile cache
-├── product:{id} (Hash) - Product cache
-├── inventory:{product_id} (String) - Inventory count
-├── cart:{user_id} (Hash) - Shopping cart
-├── session:{session_id} (Hash) - User session
-└── search:{query_hash} (String) - Search results cache
-
-Real-time Data:
-├── online_users (Set) - Online user IDs
-├── product_views:{product_id} (Sorted Set) - Real-time views
-├── trending_products (Sorted Set) - Trending products
-└── live_orders (Stream) - Live order updates
+```python
+# Event Compactor Service
+class EventCompactor:
+    def compact_analytics_events(self):
+        """Aggregate high-frequency analytics events"""
+        # Read analytics stream in batches
+        # Aggregate: page_view → daily_count
+        # Archive: aggregated_data → PostgreSQL analytics_db
+        # Delete: original events from stream
+        
+    def archive_order_events(self):
+        """Archive order lifecycle events"""
+        # Read completed order events
+        # Store: order_snapshot → PostgreSQL orders_db
+        # Delete: events older than 7 days
+        
+    def cleanup_expired_events(self):
+        """Remove expired events based on TTL"""
+        # XTRIM stream events exceeding retention
 ```
 
-## Real-time Features Implementation
+---
 
-### WebSocket Connections
+## 5. Resilience Engineering
+
+### 5.1 Service Mesh Light (Envoy)
+
+For single-node resilience without Kubernetes overhead:
+
 ```
-WebSocket Endpoints:
-├── /ws/notifications - Real-time notifications
-├── /ws/orders - Order status updates
-├── /ws/inventory - Live inventory updates
-├── /ws/analytics - Real-time analytics
-└── /ws/chat - Customer support chat
-```
-
-### Server-Sent Events (SSE)
-```
-SSE Endpoints:
-├── /sse/product-updates - Product updates
-├── /sse/price-changes - Price change notifications
-├── /sse/stock-alerts - Stock level alerts
-└── /sse/promotions - Live promotions
-```
-
-## Technology Stack
-
-### Backend Services
-- **Framework**: FastAPI (Python)
-- **Database**: PostgreSQL 15
-- **Cache**: Redis 7
-- **Search**: Elasticsearch 8
-- **Message Queue**: Redis Streams
-- **Real-time**: WebSockets, SSE
-- **Analytics**: InfluxDB
-- **ML**: Python/Scikit-learn
-
-### Frontend
-- **Framework**: Next.js 14
-- **Real-time**: Socket.io, SSE
-- **State Management**: SWR, React Query
-- **UI**: Tailwind CSS, shadcn/ui
-
-### Infrastructure
-- **Containerization**: Docker
-- **Orchestration**: Kubernetes
-- **API Gateway**: Traefik/Nginx
-- **Monitoring**: Prometheus + Grafana
-- **Logging**: ELK Stack
-- **Service Mesh**: Istio
-
-## Data Flow Examples
-
-### Order Creation Flow
-```
-1. User places order → Order Service
-2. Order Service publishes order.created event
-3. Payment Service processes payment
-4. Inventory Service updates stock
-5. Notification Service sends confirmation
-6. Analytics Service records sale
-7. Search Service updates order index
-8. Recommendation Service learns from purchase
+Envoy Configuration Structure:
+envoy.yaml
+├── admin:
+│   └── address: unix:///var/run/envoy/admin.sock
+├── static_resources:
+│   ├── listeners:
+│   │   ├── frontend_listener:
+│   │   │   └── address: 0.0.0.0:8080
+│   │   └── internal_listener:
+│   │       └── address: unix:///var/run/envoy/internal.sock
+│   └── clusters:
+│       ├── core_cluster:
+│       │   ├── hosts: unix:///var/run/aarya/core.sock
+│       │   ├── circuit_breakers:
+│       │   │   └── max_pending_requests: 1000
+│       │   ├── retry_policy:
+│       │   │   └── num_retries: 3
+│       │   └── timeout: 5s
+│       ├── commerce_cluster:
+│       │   └── ...
+│       └── payment_cluster:
+│           └── ...
+└── http_filters:
+    ├── health_check
+    ├── router
+    └──熔断器
 ```
 
-### Real-time Inventory Update
-```
-1. Product purchased → Inventory updated
-2. Product Service publishes inventory.updated event
-3. Cart Service updates cart availability
-4. Frontend receives WebSocket update
-5. Search Service updates availability
-6. Analytics Service records sale
-7. Recommendation Service adjusts suggestions
+**Benefits:**
+- Automatic circuit breaking
+- Retry with exponential backoff
+- Request timeouts
+- Load balancing across workers
+
+### 5.2 Resource Limits (cgroups/Docker)
+
+```yaml
+# Docker Compose with Resource Limits
+services:
+  core_platform:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpu_shares: 512
+    oom_kill_disable: true
+    restart_policy:
+      max_attempts: 3
+      delay: 5s
+
+  commerce:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1.5G
+    mem_limit: 1.5g
+    cpu_shares: 512
 ```
 
-This architecture provides a scalable, real-time e-commerce platform with comprehensive search capabilities and robust data management across multiple services.
+### 5.3 Backpressure System
+
+```
+Backpressure Implementation:
+┌──────────────────────────────────────────────────────────┐
+│ Gateway Layer                                             │
+│ ├── Request Queue Limit: 1000                            │
+│ ├── Rate Limiter: 100 req/s per IP                      │
+│ └── Timeout: 30s per request                             │
+└──────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ Redis Streams                                             │
+│ ├── XREADGROUP with BLOCK 5000                           │
+│ ├── Consumer slow-ack protection                         │
+│ └── Max stream length enforcement                        │
+└──────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ Database Layer                                            │
+│ ├── PgBouncer pool limits                                │
+│ ├── Query timeout enforcement                            │
+│ └── Connection pool saturation protection                │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. Monitoring & Observability
+
+### 6.1 Key Metrics
+
+```yaml
+# Prometheus Metrics Configuration
+metrics:
+  - name: http_requests_total
+    type: counter
+    labels: [service, method, path, status]
+    
+  - name: http_request_duration_seconds
+    type: histogram
+    labels: [service, method, path]
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+    
+  - name: redis_commands_total
+    type: counter
+    labels: [command, status]
+    
+  - name: postgres_connections
+    type: gauge
+    labels: [state]
+    
+  - name: stream_consumer_lag
+    type: gauge
+    labels: [stream, consumer_group]
+    
+  - name: service_health_status
+    type: gauge
+    labels: [service]
+```
+
+### 6.2 Alert Rules
+
+```yaml
+# Prometheus Alert Rules
+groups:
+  - name: aarya_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count / pg_settings_max_connections > 0.9
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection pool near capacity"
+          
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 85%"
+          
+      - alert: StreamConsumerLagHigh
+        expr: stream_consumer_lag > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer lag on {{ $labels.stream }} exceeds 10000"
+```
+
+---
+
+## 7. Security Architecture
+
+### 7.1 Network Security
+
+```yaml
+# Network Segmentation
+networks:
+  frontend_network:
+    driver: bridge
+    internal: false
+    attachable: true
+    
+  backend_network:
+    driver: bridge
+    internal: true
+    attachable: false
+    
+  payment_network:
+    driver: bridge
+    internal: true
+    attachable: false
+    # Only payment service can access
+```
+
+### 7.2 Secret Management
+
+```bash
+# Environment-based secret injection
+# Use Docker secrets or external vault (HashiCorp Vault)
+
+SECRETS:
+├── DATABASE_URL → PostgreSQL connection
+├── REDIS_URL → Redis connection
+├── JWT_SECRET → Token signing
+├── ENCRYPTION_KEY → Data encryption
+├── PAYMENT_API_KEY → Payment gateway
+└── SMTP credentials → Email service
+```
+
+---
+
+## 8. Failure Scenarios & Recovery
+
+### 8.1 Failure Matrix
+
+| Component | Failure Mode | Impact | Recovery | RTO |
+|-----------|-------------|--------|----------|-----|
+| PostgreSQL | Crash | Complete outage | Auto-restart, replay WAL | < 2 min |
+| Redis | OOM | Cache misses, session loss | Restart, restore from RDB | < 1 min |
+| Core Platform | OOM | Auth failures | Restart, cgroup kill | < 30 sec |
+| Commerce | High latency | Slow checkout | Scale horizontal | < 5 min |
+| Payment | Unavailable | Failed transactions | Queue + retry | < 5 min |
+
+### 8.2 Recovery Procedures
+
+```bash
+#!/bin/bash
+# recovery.sh - Automated recovery procedures
+
+case "$1" in
+  postgres)
+    # Check PostgreSQL health
+    pg_isready -h postgres
+    
+    # If unhealthy, attempt restart
+    if [ $? -ne 0 ]; then
+      docker-compose restart postgres
+      # Wait for recovery
+      sleep 30
+      # Verify
+      pg_isready -h postgres
+    fi
+    ;;
+    
+  redis)
+    # Check Redis health
+    redis-cli ping
+    
+    # If unhealthy, restart
+    if [ $? != "PONG" ]; then
+      docker-compose restart redis
+      sleep 10
+    fi
+    ;;
+    
+  service)
+    SERVICE=$2
+    # Check service health
+    curl -f http://localhost:8080/health || {
+      echo "Service $SERVICE unhealthy, restarting..."
+      docker-compose restart $SERVICE
+    }
+    ;;
+esac
+```
+
+---
+
+## 9. Future Scaling Path
+
+### 9.1 Horizontal Scaling Readiness
+
+```
+Current State (Single Node)          Future State (Multi-Node)
+─────────────────────────             ─────────────────────────
+app:3000                              Load Balancer (Nginx)
+    │                                      │
+    ├── core:8001                         ├── core_cluster (3x)
+    ├── commerce:8010                     ├── commerce_cluster (3x)
+    ├── payment:8020                     ├── payment_cluster (2x)
+    ├── content:8030                     ├── content_cluster (2x)
+    └── search:8040                      └── search_cluster (2x)
+         │                                      │
+    postgres:5432                         PostgreSQL Cluster (Patroni)
+    redis:6379                            Redis Cluster
+    elasticsearch:9200                    Elasticsearch Cluster
+```
+
+### 9.2 Stateless Service Requirements
+
+All services must follow these rules for horizontal scaling:
+
+1. **No local filesystem storage**
+   - Upload files → Object Storage (S3/R2)
+   - Temp files → /tmp with cleanup
+
+2. **No in-memory sessions**
+   - Sessions → Redis
+   - Caches → Redis
+
+3. **Idempotent operations**
+   - Design all API endpoints to be retry-safe
+   - Use idempotency keys for payments
+
+4. **Configuration externalization**
+   - All config → Environment variables
+   - Feature flags → Database/Redis
+
+---
+
+## 10. Performance Tuning Checklist
+
+### 10.1 Database Tuning
+
+- [ ] `shared_buffers` set to 25% of RAM
+- [ ] `effective_io_concurrency` set to 200 (SSD)
+- [ ] `random_page_cost` set to 1.1 (SSD)
+- [ ] Connection pooling via PgBouncer
+- [ ] Query optimization with EXPLAIN ANALYZE
+- [ ] Index strategy for frequent queries
+
+### 10.2 Redis Tuning
+
+- [ ] `maxmemory` configured
+- [ ] Appropriate eviction policy per namespace
+- [ ] AOF persistence enabled
+- [ ] Connection pooling in application
+- [ ] Pipeline for bulk operations
+
+### 10.3 Application Tuning
+
+- [ ] Connection pool sizing (10-20 per service)
+- [ ] Request timeout enforcement (30s)
+- [ ] Response compression (gzip/brotli)
+- [ ] Database query optimization
+- [ ] Redis caching strategy (cache-aside)
+- [ ] Async processing for non-critical paths
+
+### 10.4 Infrastructure Tuning
+
+- [ ] NVMe disk for PostgreSQL WAL
+- [ ] Separate volumes for data and WAL
+- [ ] `noatime` mount option
+- [ ] Kernel parameters: `vm.swappiness=10`
+- [ ] File descriptor limits: `65535`
+
+---
+
+## 11. Deployment Checklist
+
+### 11.1 Pre-Deployment
+
+```bash
+# 1. Verify resource availability
+free -h
+df -h
+iostat -x 1 5
+
+# 2. Check Docker resources
+docker stats
+
+# 3. Backup current data
+pg_dump -Fc aarya_clothing > backup_$(date +%Y%m%d).dump
+redis-cli BGSAVE
+
+# 4. Verify configuration
+docker-compose config
+
+# 5. Check certificate validity (if HTTPS)
+openssl s_client -connect domain:443 -servername domain
+```
+
+### 11.2 Deployment Steps
+
+```bash
+# 1. Pull latest images
+docker-compose pull
+
+# 2. Build services
+docker-compose build --no-cache
+
+# 3. Run health checks
+docker-compose up -d
+sleep 30
+docker-compose ps
+
+# 4. Verify external connectivity
+curl -f https://api.domain.com/health
+curl -f https://domain.com/health
+
+# 5. Check logs for errors
+docker-compose logs --tail=100
+```
+
+### 11.3 Post-Deployment Verification
+
+```bash
+# 1. Run smoke tests
+./tests/smoke_test.sh
+
+# 2. Verify database migrations
+alembic current
+alembic history --verbose
+
+# 3. Check monitoring dashboards
+# - Grafana: Service health, latency, error rates
+# - Prometheus: Alert firing status
+
+# 4. Load test (if applicable)
+./tests/load_test.sh --duration=300 --users=100
+
+# 5. Document deployment
+echo "$(date): Deployment completed" >> deployment_log.txt
+```
+
+---
+
+## 12. Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          AARYA CLOTHING                             │
+│                    Production Architecture (16GB VPS)               │
+└─────────────────────────────────────────────────────────────────────┘
+
+     ┌──────────────────────────────────────────────────────────┐
+     │                      FRONTEND LAYER                      │
+     │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+     │  │   CDN    │  │  Next.js │  │   WebSocket│  │  Static  │ │
+     │  │  (R2)    │  │  (:3000) │  │  Client   │  │   Files  │ │
+     │  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+     └──────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+     ┌──────────────────────────────────────────────────────────┐
+     │                     API GATEWAY (:8080)                   │
+     │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │
+     │  │   Nginx     │  │   Rate     │  │  Auth/JWT   │       │
+     │  │  (Reverse   │  │  Limiting   │  │  Validation │       │
+     │  │   Proxy)    │  │             │  │             │       │
+     │  └─────────────┘  └─────────────┘  └─────────────┘       │
+     └──────────────────────────────────────────────────────────┘
+                                    │
+           ┌────────────────────────┼────────────────────────┐
+           │                        │                        │
+           ▼                        ▼                        ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│   CORE PLATFORM  │  │    COMMERCE      │  │     PAYMENT      │
+│   (:8001-8003)   │  │   (:8010-8012)   │  │     (:8020)      │
+│  ┌────────────┐  │  │  ┌────────────┐  │  │  ┌────────────┐  │
+│  │   User     │  │  │  │  Product   │  │  │  │  Payment   │  │
+│  │   Auth     │  │  │  │  Inventory │  │  │  │  Fraud     │  │
+│  │   Session  │  │  │  │  Cart      │  │  │  │  Refund    │  │
+│  └────────────┘  │  │  │  Order     │  │  │  └────────────┘  │
+│       │          │  │  └────────────┘  │  │        │         │
+│       │          │  │       │          │  │        │         │
+└───────┼──────────┘  └───────┼──────────┘  └────────┼──────────┘
+        │                     │                      │
+        │                     │                      │
+        └─────────────────────┴──────────────────────┘
+                                │
+                                ▼
+     ┌──────────────────────────────────────────────────────────┐
+     │                      DATA LAYER                          │
+     │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+     │  │  PostgreSQL  │  │    Redis     │  │Elasticsearch │    │
+     │  │   (:5432)    │  │   (:6379)    │  │   (:9200)    │    │
+     │  │  ┌────────┐  │  │  ┌────────┐  │  │             │    │
+     │  │  │ Primary│  │  │  │ Cache  │  │  │  Products   │    │
+     │  │  │ Write  │  │  │  │ Session│  │  │  Search      │    │
+     │  │  └────────┘  │  │  │ Streams│  │  │  Index      │    │
+     │  │  ┌────────┐  │  │  │ Cart   │  │  └────────────┘  │
+     │  │  │ Replica│  │  │  │ Locks  │  │                  │
+     │  │  │ Read   │  │  │  └────────┘  │                  │
+     │  │  └────────┘  │  │               │                  │
+     │  └──────────────┘  └───────────────┘                  │
+     └──────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+     ┌──────────────────────────────────────────────────────────┐
+     │                  EVENT & MESSAGING                        │
+     │  ┌─────────────────────────────────────────────────────┐ │
+     │  │                 Redis Streams                         │ │
+     │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐    │ │
+     │  │  │  User   │ │ Product │ │  Order  │ │Payment  │    │ │
+     │  │  │ Events  │ │ Events  │ │ Events  │ │ Events  │    │ │
+     │  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘    │ │
+     │  │  ┌─────────┐ ┌─────────┐                              │ │
+     │  │  │Analytics│ │Notify   │                              │ │
+     │  │  │ Events  │ │ Events  │                              │ │
+     │  │  └─────────┘ └─────────┘                              │ │
+     │  └─────────────────────────────────────────────────────┘ │
+     └──────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+     ┌──────────────────────────────────────────────────────────┐
+     │                  CONTENT SERVICES (:8030-8040)          │
+     │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+     │  │ Notification│  │  Analytics  │  │ Search & Recs   │  │
+     │  │  Service    │  │  Service    │  │  Service        │  │
+     │  └─────────────┘  └─────────────┘  └─────────────────┘  │
+     └──────────────────────────────────────────────────────────┘
+
+     ┌──────────────────────────────────────────────────────────┐
+     │                   MONITORING STACK                       │
+     │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+     │  │Prometheus│  │  Grafana │  │   ELK     │  │  Health  │ │
+     │  │Metrics   │  │Dashboards│  │  Logging  │  │  Checks  │ │
+     │  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+     └──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Summary
+
+This architecture provides:
+
+1. **Service Consolidation**: Reduced from 11 services to 5 for single-node efficiency
+2. **Resilience Engineering**: Circuit breakers, resource limits, backpressure
+3. **Performance Optimization**: Unix sockets, gRPC, connection pooling
+4. **Operational Excellence**: Monitoring, alerting, automated recovery
+5. **Future-Ready**: Stateless design enabling horizontal scaling
+
+Key production principles applied:
+- **Failure isolation** prevents cascading outages
+- **Resource limits** protect against runaway services
+- **Backpressure** ensures graceful degradation
+- **Observability** enables rapid diagnosis
