@@ -1,5 +1,5 @@
 # Aarya Clothing - Production Docker Compose
-# Optimized for 16GB VPS with merged service architecture
+# Microservices Architecture for VPS Deployment
 
 version: '3.8'
 
@@ -20,23 +20,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - postgres_wal:/var/lib/postgresql/wal
-      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    command: >
-      postgres
-      -c config_file=/etc/postgresql/postgresql.conf
-      -c shared_buffers=4GB
-      -c max_connections=200
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 6G
-        reservations:
-          cpus: '2'
-          memory: 4G
-    mem_limit: 6g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d aarya_clothing"]
       interval: 10s
@@ -46,10 +30,6 @@ services:
     networks:
       - backend_network
     restart: unless-stopped
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
 
   # ============================================================
   # CACHE & MESSAGE QUEUE
@@ -64,15 +44,6 @@ services:
     volumes:
       - redis_data:/data
       - ./docker/redis/redis.conf:/etc/redis/redis.conf:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
-    mem_limit: 4g
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -81,67 +52,40 @@ services:
     networks:
       - backend_network
     restart: unless-stopped
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
 
   # ============================================================
   # CORE PLATFORM SERVICE (Port 8001)
   # User Management + Authentication + Sessions
   # ============================================================
 
-  core_platform:
+  core:
     build:
-      context: ./backend
+      context: ./services/core
       dockerfile: Dockerfile
-    container_name: aarya_core_platform
+    container_name: aarya_core
     ports:
       - "8001:8001"
     environment:
-      - SERVICE_NAME=core_platform
+      - SERVICE_NAME=core
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
-      - REFRESH_TOKEN_EXPIRE_DAYS=7
-      - PASSWORD_MIN_LENGTH=8
-      - PASSWORD_REQUIRE_UPPERCASE=true
-      - PASSWORD_REQUIRE_LOWERCASE=true
-      - PASSWORD_REQUIRE_NUMBER=true
-      - PASSWORD_REQUIRE_SPECIAL=false
-      - LOGIN_RATE_LIMIT=5
-      - LOGIN_RATE_WINDOW=300
-      - MAX_LOGIN_ATTEMPTS=5
-      - ACCOUNT_LOCKOUT_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_MINUTES=1440
+      - SESSION_EXPIRE_MINUTES=1440
       - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
       - DEBUG=false
       - LOG_LEVEL=INFO
-    volumes:
-      - ./backend:/app:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '1.5'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    mem_limit: 1g
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - backend_network
     restart: unless-stopped
-    depends_on:
-      - postgres
-      - redis
 
   # ============================================================
   # COMMERCE SERVICE (Port 8010)
@@ -150,8 +94,8 @@ services:
 
   commerce:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.commerce
+      context: ./services/commerce
+      dockerfile: Dockerfile
     container_name: aarya_commerce
     ports:
       - "8010:8010"
@@ -160,36 +104,22 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
-      - CORE_PLATFORM_URL=http://core_platform:8001
+      - CORE_PLATFORM_URL=http://core:8001
       - CART_TTL_HOURS=168
       - ORDER_TIMEOUT_MINUTES=15
-      - INVENTORY_LOCK_TIMEOUT=300
+      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
       - DEBUG=false
       - LOG_LEVEL=INFO
-    volumes:
-      - ./backend:/app:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 1.5G
-        reservations:
-          cpus: '1'
-          memory: 1G
-    mem_limit: 1.5g
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
     networks:
       - backend_network
     restart: unless-stopped
-    depends_on:
-      - postgres
-      - redis
-      - core_platform
 
   # ============================================================
   # PAYMENT SERVICE (Port 8020)
@@ -198,8 +128,8 @@ services:
 
   payment:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.payment
+      context: ./services/payment
+      dockerfile: Dockerfile
     container_name: aarya_payment
     ports:
       - "8020:8020"
@@ -208,40 +138,24 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
-      - CORE_PLATFORM_URL=http://core_platform:8001
+      - CORE_PLATFORM_URL=http://core:8001
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - PAYMENT_TIMEOUT_SECONDS=30
       - MAX_RETRY_ATTEMPTS=3
+      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
       - DEBUG=false
       - LOG_LEVEL=INFO
-    volumes:
-      - ./backend:/app:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-    mem_limit: 512m
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
     networks:
       - backend_network
-      - payment_network
     restart: unless-stopped
-    depends_on:
-      - postgres
-      - redis
-      - core_platform
-    profiles:
-      - payment
 
   # ============================================================
   # FRONTEND (Next.js - Port 3000)
@@ -250,104 +164,19 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.production
-      args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.example.com}
+      dockerfile: Dockerfile
     container_name: aarya_frontend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_TELEMETRY_DISABLED=1
-    volumes:
-      - frontend_static:/app/.next/static
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    mem_limit: 1g
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+    depends_on:
+      - core
+      - commerce
     networks:
       - frontend_network
     restart: unless-stopped
-
-  # ============================================================
-  # MONITORING STACK (Optional - Profiles)
-  # ============================================================
-
-  prometheus:
-    image: prom/prometheus:v2.48.0
-    container_name: aarya_prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - prometheus_data:/prometheus
-      - ./docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./docker/monitoring/rules:/etc/prometheus/rules:ro
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
-      - '--web.enable-lifecycle'
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 1G
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-      - monitoring_network
-    restart: unless-stopped
-    profiles:
-      - monitoring
-
-  grafana:
-    image: grafana/grafana:10.2.0
-    container_name: aarya_grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-change_in_production}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./docker/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-      - monitoring_network
-    restart: unless-stopped
-    depends_on:
-      - prometheus
-    profiles:
-      - monitoring
 
   # ============================================================
   # NETWORK DEFINITIONS
@@ -356,32 +185,9 @@ services:
 networks:
   frontend_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.28.0.0/16
-    internal: false
 
   backend_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.29.0.0/16
-    internal: true
-
-  payment_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.30.0.0/16
-    internal: true
-    attachable: false
-
-  monitoring_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.31.0.0/16
-    internal: true
 
   # ============================================================
   # VOLUME DEFINITIONS
@@ -390,22 +196,5 @@ networks:
 volumes:
   postgres_data:
     driver: local
-  postgres_wal:
-    driver: local
   redis_data:
     driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
-  frontend_static:
-    driver: local
-
-# ============================================================
-# SECRET MANAGEMENT
-# ============================================================
-# In production, use Docker Swarm secrets or external vault:
-# - POSTGRES_PASSWORD
-# - JWT_SECRET_KEY
-# - STRIPE_SECRET_KEY
-# - GRAFANA_ADMIN_PASSWORD
