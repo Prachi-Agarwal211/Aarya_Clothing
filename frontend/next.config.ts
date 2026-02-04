@@ -8,8 +8,6 @@ const nextConfig: NextConfig = {
     // Build-time errors will still be caught, but not fail the build
     ignoreBuildErrors: false,
   },
-  // Reduce memory usage during build
-  swcMinify: true,
   compiler: {
     removeConsole: false,
   },
