@@ -61,6 +61,20 @@ class Settings(BaseSettings):
     OTP_RESEND_COOLDOWN_MINUTES: int = 1
     OTP_MAX_RESEND_PER_HOUR: int = 5
     
+    # Email/SMTP Settings
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_TLS: bool = True
+    EMAIL_FROM: str = "noreply@aaryaclothings.com"
+    EMAIL_FROM_NAME: str = "Aarya Clothings"
+    
+    # Password Reset Settings
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 24
+    PASSWORD_RESET_RATE_LIMIT: int = 3
+    PASSWORD_RESET_RATE_WINDOW: int = 3600  # 1 hour
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

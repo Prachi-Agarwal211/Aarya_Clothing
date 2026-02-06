@@ -23,9 +23,12 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
     RAZORPAY_KEY_ID: Optional[str] = None
     RAZORPAY_KEY_SECRET: Optional[str] = None
+    RAZORPAY_WEBHOOK_SECRET: Optional[str] = None
     
     PAYMENT_TIMEOUT_SECONDS: int = 30
     MAX_RETRY_ATTEMPTS: int = 3
+    PAYMENT_SUCCESS_URL: str = "http://localhost:3000/payment/success"
+    PAYMENT_FAILURE_URL: str = "http://localhost:3000/payment/failure"
     
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]

@@ -22,11 +22,12 @@ from typing import Optional
 from core.config import settings
 from core.redis_client import redis_client
 from database.database import get_db, init_db
-from models.user import User
+from models.user import User, UserRole
 from schemas.auth import (
     UserCreate, UserResponse, UserUpdate,
     Token, LoginRequest, LoginResponse,
-    TokenRefresh, ChangePasswordRequest
+    TokenRefresh, ChangePasswordRequest,
+    ForgotPasswordRequest, PasswordResetConfirm
 )
 from schemas.otp import (
     OTPSendRequest, OTPVerifyRequest, OTPResendRequest,
@@ -308,6 +309,82 @@ async def change_password(
         )
     
     return {"detail": "Password changed successfully"}
+
+
+# ==================== Password Reset Routes ====================
+
+@app.post("/api/v1/auth/forgot-password", status_code=status.HTTP_200_OK,
+          tags=["Authentication"])
+async def forgot_password(
+    request_data: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Request password reset email.
+    Sends a password reset link to the user's email if it exists.
+    """
+    auth_service = AuthService(db)
+    
+    # Get frontend URL from referer or use default
+    frontend_url = request.headers.get("origin", "http://localhost:3000")
+    
+    try:
+        result = auth_service.request_password_reset(
+            email=request_data.email,
+            frontend_url=frontend_url
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e)
+        )
+
+
+@app.post("/api/v1/auth/reset-password", status_code=status.HTTP_200_OK,
+          tags=["Authentication"])
+async def reset_password(
+    request_data: PasswordResetConfirm,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using token from email.
+    """
+    auth_service = AuthService(db)
+    
+    try:
+        result = auth_service.reset_password(
+            token=request_data.token,
+            new_password=request_data.new_password
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@app.get("/api/v1/auth/verify-reset-token/{token}", status_code=status.HTTP_200_OK,
+         tags=["Authentication"])
+async def verify_reset_token(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify if a password reset token is valid.
+    """
+    auth_service = AuthService(db)
+    user = auth_service.verify_reset_token(token)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token"
+        )
+    
+    return {"valid": True, "email": user.email}
 
 
 # ==================== OTP Routes ====================

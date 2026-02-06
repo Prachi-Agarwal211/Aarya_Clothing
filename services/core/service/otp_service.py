@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from core.config import settings
 from core.redis_client import redis_client
 from models.otp import OTP
+from service.email_service import email_service
 
 
 class OTPService:
@@ -59,9 +60,16 @@ class OTPService:
         # Store OTP in Redis (with short expiry)
         redis_client.set_otp(otp_key, otp_code, expires_in=settings.OTP_EXPIRY_MINUTES * 60)
         
-        # TODO: Integrate with actual email/WhatsApp service
-        # For now, just return success (OTP will be logged)
-        print(f"[OTP] Sending {otp_type} OTP to {email or phone}: {otp_code}")
+        # Send OTP via email if email provided
+        if email:
+            email_service.send_otp_email(
+                to_email=email,
+                otp_code=otp_code,
+                purpose=purpose or "verification"
+            )
+        else:
+            # Phone OTP - log for now (WhatsApp integration pending)
+            print(f"[OTP] Would send to {phone}: {otp_code}")
         
         return {
             "success": True,

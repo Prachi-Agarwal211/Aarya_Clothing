@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     ORDER_TIMEOUT_MINUTES: int = 15
     INVENTORY_LOCK_TIMEOUT: int = 300
     
+    # Cloudflare R2 Storage Settings
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = "aarya-clothing-images"
+    R2_PUBLIC_URL: str = ""  # Public bucket URL or custom domain
+    R2_REGION: str = "auto"
+    
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
     

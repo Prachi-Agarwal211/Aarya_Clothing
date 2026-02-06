@@ -1,5 +1,5 @@
 # Commerce Service - Aarya Clothing
-# Product Management, Cart, Orders
+# Product Management, Categories, Cart, Orders, Inventory
 
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
@@ -11,3 +11,4 @@ psycopg2-binary==2.9.9
 redis==5.0.1
 python-dotenv==1.0.0
 httpx==0.26.0
+boto3==1.34.34

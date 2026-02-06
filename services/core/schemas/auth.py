@@ -2,6 +2,14 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
+from enum import Enum
+
+
+class UserRole(str, Enum):
+    """User role enumeration."""
+    ADMIN = "admin"
+    STAFF = "staff"
+    CUSTOMER = "customer"
 
 
 # ==================== User Schemas ====================
@@ -17,13 +25,14 @@ class UserCreate(UserBase):
     """Schema for creating a user."""
     password: str = Field(..., min_length=8)
     phone: Optional[str] = None
+    role: UserRole = UserRole.CUSTOMER
 
 
 class UserResponse(UserBase):
     """Schema for user response."""
     id: int
+    role: UserRole
     is_active: bool
-    is_admin: bool
     email_verified: bool
     phone_verified: Optional[str] = None
     created_at: datetime
@@ -46,6 +55,7 @@ class UserUpdate(BaseModel):
 class Token(BaseModel):
     """Schema for token response."""
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     expires_in: int
 
@@ -79,8 +89,13 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
 
 
-class PasswordResetRequest(BaseModel):
+class ForgotPasswordRequest(BaseModel):
     """Schema for requesting password reset."""
+    email: EmailStr
+
+
+class PasswordResetRequest(BaseModel):
+    """Schema for requesting password reset (alias)."""
     email: EmailStr
 
 

@@ -9,7 +9,8 @@ from sqlalchemy import or_
 
 from core.config import settings
 from core.redis_client import redis_client
-from models.user import User
+from models.user import User, UserRole
+from service.email_service import email_service
 
 
 # Password hashing context
@@ -72,13 +73,18 @@ class AuthService:
         ).first():
             raise ValueError("User with this email or username already exists")
         
-        # Create user
+        # Create user with role
+        role = getattr(user_data, 'role', UserRole.CUSTOMER)
+        if isinstance(role, str):
+            role = UserRole(role)
+        
         user = User(
             email=user_data.email,
             username=user_data.username,
             full_name=user_data.full_name,
             hashed_password=self.get_password_hash(user_data.password),
-            phone=user_data.phone
+            phone=getattr(user_data, 'phone', None),
+            role=role
         )
         
         self.db.add(user)
@@ -150,8 +156,8 @@ class AuthService:
         user.last_login = datetime.utcnow()
         self.db.commit()
         
-        # Generate tokens
-        tokens = self._generate_tokens(user)
+        # Generate tokens with remember_me
+        tokens = self._generate_tokens(user, remember_me)
         
         # Create session
         session_id = secrets.token_urlsafe(32)
@@ -185,39 +191,45 @@ class AuthService:
     
     # ==================== Token Operations ====================
     
-    def _generate_tokens(self, user: User) -> Dict[str, str]:
-        """Generate access and refresh tokens."""
-        # Access token
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    def _generate_tokens(self, user: User, remember_me: bool = False) -> Dict[str, str]:
+        """Generate access and refresh tokens with role."""
+        now = datetime.utcnow()
+        
+        # Access token payload with role
+        access_token_expires = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_payload = {
+            "sub": str(user.id),
+            "username": user.username,
+            "email": user.email,
+            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+            "type": "access",
+            "exp": access_token_expires
+        }
         access_token = jwt.encode(
-            {
-                "sub": str(user.id),
-                "username": user.username,
-                "email": user.email,
-                "type": "access"
-            },
+            access_payload,
             settings.SECRET_KEY,
-            algorithm=settings.ALGORITHM,
-            expires_delta=access_token_expires
+            algorithm=settings.ALGORITHM
         )
         
-        # Refresh token
-        refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES if remember_me else settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        # Refresh token payload
+        refresh_minutes = settings.REFRESH_TOKEN_EXPIRE_MINUTES if remember_me else settings.ACCESS_TOKEN_EXPIRE_MINUTES * 2
+        refresh_token_expires = now + timedelta(minutes=refresh_minutes)
+        refresh_payload = {
+            "sub": str(user.id),
+            "type": "refresh",
+            "exp": refresh_token_expires
+        }
         refresh_token = jwt.encode(
-            {
-                "sub": str(user.id),
-                "type": "refresh"
-            },
+            refresh_payload,
             settings.SECRET_KEY,
-            algorithm=settings.ALGORITHM,
-            expires_delta=refresh_token_expires
+            algorithm=settings.ALGORITHM
         )
         
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
-            "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            "refresh_token": refresh_token
+            "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
         }
     
     def refresh_access_token(self, refresh_token: str) -> Dict[str, str]:
@@ -318,3 +330,126 @@ class AuthService:
         
         except JWTError:
             return None
+    
+    # ==================== Password Reset ====================
+    
+    def request_password_reset(self, email: str, frontend_url: str = "http://localhost:3000") -> Dict[str, Any]:
+        """Request password reset - generates token and sends email."""
+        # Rate limiting
+        rate_limit = redis_client.check_rate_limit(
+            f"password_reset:{email}",
+            limit=settings.PASSWORD_RESET_RATE_LIMIT,
+            window=settings.PASSWORD_RESET_RATE_WINDOW
+        )
+        
+        if not rate_limit["allowed"]:
+            raise ValueError("Too many password reset requests. Please try again later.")
+        
+        # Find user
+        user = self.get_user_by_email(email)
+        
+        if not user:
+            # Don't reveal if user exists - still return success
+            return {
+                "success": True,
+                "message": "If an account with this email exists, a password reset link has been sent."
+            }
+        
+        if not user.is_active:
+            return {
+                "success": True,
+                "message": "If an account with this email exists, a password reset link has been sent."
+            }
+        
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        expires = datetime.utcnow() + timedelta(hours=settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS)
+        
+        # Store token in database
+        user.password_reset_token = reset_token
+        user.password_reset_expires = expires
+        self.db.commit()
+        
+        # Build reset URL
+        reset_url = f"{frontend_url}/reset-password?token={reset_token}"
+        
+        # Send email
+        email_service.send_password_reset_email(
+            to_email=user.email,
+            reset_token=reset_token,
+            reset_url=reset_url
+        )
+        
+        return {
+            "success": True,
+            "message": "If an account with this email exists, a password reset link has been sent."
+        }
+    
+    def verify_reset_token(self, token: str) -> Optional[User]:
+        """Verify password reset token and return user if valid."""
+        user = self.db.query(User).filter(
+            User.password_reset_token == token
+        ).first()
+        
+        if not user:
+            return None
+        
+        if not user.password_reset_expires:
+            return None
+        
+        if user.password_reset_expires < datetime.utcnow():
+            # Token expired - clear it
+            user.password_reset_token = None
+            user.password_reset_expires = None
+            self.db.commit()
+            return None
+        
+        return user
+    
+    def reset_password(self, token: str, new_password: str) -> Dict[str, Any]:
+        """Reset password using reset token."""
+        user = self.verify_reset_token(token)
+        
+        if not user:
+            raise ValueError("Invalid or expired password reset token.")
+        
+        # Validate new password
+        valid, errors = self.validate_password(new_password)
+        if not valid:
+            raise ValueError("; ".join(errors))
+        
+        # Update password
+        user.hashed_password = self.get_password_hash(new_password)
+        user.password_reset_token = None
+        user.password_reset_expires = None
+        self.db.commit()
+        
+        # Invalidate all sessions
+        self.logout_all(user.id)
+        
+        return {
+            "success": True,
+            "message": "Password has been reset successfully. Please login with your new password."
+        }
+    
+    # ==================== Role-Based Access Helpers ====================
+    
+    @staticmethod
+    def require_role(*allowed_roles: UserRole):
+        """Decorator/dependency factory for role-based access."""
+        def check_role(user: User) -> bool:
+            if user is None:
+                return False
+            return user.role in allowed_roles
+        return check_role
+    
+    @staticmethod
+    def is_admin(user: User) -> bool:
+        """Check if user is admin."""
+        return user is not None and user.role == UserRole.ADMIN
+    
+    @staticmethod
+    def is_staff_or_admin(user: User) -> bool:
+        """Check if user is staff or admin."""
+        return user is not None and user.role in [UserRole.ADMIN, UserRole.STAFF]
+
