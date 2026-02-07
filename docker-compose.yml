@@ -1,8 +1,6 @@
 # Aarya Clothing - Production Docker Compose
 # Microservices Architecture for VPS Deployment
 
-version: '3.8'
-
 services:
   # ============================================================
   # DATABASE LAYER

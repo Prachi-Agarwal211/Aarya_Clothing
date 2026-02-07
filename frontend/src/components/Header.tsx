@@ -4,6 +4,21 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, ShoppingBag, Menu, X, User } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+
+function AuthUserIcon() {
+  const { isAuthenticated, user } = useAuth();
+
+  const href = isAuthenticated
+    ? (user?.role === 'admin' ? '/admin' : '/profile')
+    : '/login';
+
+  return (
+    <Link href={href} className="p-2 text-[#EAEAEA] hover:text-[#C9A227] transition-colors hidden sm:block">
+      <User className="w-5 h-5" />
+    </Link>
+  );
+}
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -63,9 +78,7 @@ export default function Header() {
               <button className="p-2 text-[#EAEAEA] hover:text-[#C9A227] transition-colors">
                 <Search className="w-5 h-5" />
               </button>
-              <Link href="/login" className="p-2 text-[#EAEAEA] hover:text-[#C9A227] transition-colors hidden sm:block">
-                <User className="w-5 h-5" />
-              </Link>
+              <AuthUserIcon />
               <button className="p-2 text-[#EAEAEA] hover:text-[#C9A227] transition-colors relative">
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-[#C9A227] rounded-full"></span>

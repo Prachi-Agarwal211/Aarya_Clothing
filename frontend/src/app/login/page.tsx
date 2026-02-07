@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Eye, EyeOff, User, Lock, Mail, Info, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { authenticateUser, TEST_CREDENTIALS } from "@/lib/credentials";
+import { useAuth } from "@/contexts/AuthContext";
+// import { authenticateUser, TEST_CREDENTIALS } from "@/lib/credentials"; // Removing mock auth
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -13,42 +14,77 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpMethod, setOtpMethod] = useState('whatsapp'); // 'whatsapp' or 'email'
   const [isLogin, setIsLogin] = useState(true);
-  const [showTestCredentials, setShowTestCredentials] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginSuccess, setLoginSuccess] = useState('');
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const { login, register } = useAuth(); // Use auth hook
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setLoginSuccess('');
 
-    // Get form data
     const formData = new FormData(e.target as HTMLFormElement);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
 
-    // Authenticate user
-    const result = authenticateUser(email, password);
-    
-    if (result.success && result.user) {
-      setLoginSuccess(`Welcome back, ${result.user.name}! (${result.user.role})`);
-      
-      // Store user info in localStorage for persistence across pages
-      localStorage.setItem('user', JSON.stringify(result.user));
-      
-      // Redirect based on role
-      setTimeout(() => {
-        if (result.user.role === 'admin') {
-          router.push('/admin');
-        } else {
-          router.push('/');
-        }
-      }, 1500);
+    if (isLogin) {
+      const email = formData.get('email') as string;
+      const password = formData.get('password') as string;
+      const rememberMe = (e.target as HTMLFormElement).querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked || false;
+
+      const result = await login(email, password, rememberMe);
+
+      if (result.success) {
+        setLoginSuccess('Login successful! Redirecting...');
+      } else {
+        setLoginError(result.message || 'Login failed');
+      }
     } else {
-      setLoginError(result.message || 'Login failed');
+      // Registration Logic
+      const email = formData.get('email') as string;
+      const password = formData.get('password') as string;
+      const username = formData.get('username') as string;
+      const firstName = formData.get('firstName') as string;
+      const lastName = formData.get('lastName') as string;
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      // Simple client-side validation
+      if (!username || !email || !password) {
+        setLoginError('Please fill in all required fields.');
+        return;
+      }
+
+      const result = await register({
+        email,
+        username,
+        password,
+        full_name: fullName,
+        role: 'customer'
+      });
+
+      if (result.success) {
+        setLoginSuccess('Account created! Please sign in.');
+        setTimeout(() => setIsLogin(true), 2000);
+      } else {
+        setLoginError(result.message || 'Registration failed');
+      }
     }
   };
+
+  // Effect to redirect when user is authenticated
+  const { user, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (user.role === 'admin') {
+        router.push('/admin');
+      } else if (user.role === 'staff') {
+        router.push('/admin'); // or /staff
+      } else {
+        router.push('/');
+      }
+    }
+  }, [isAuthenticated, user, router]);
 
   return (
     <div className="min-h-screen bg-[#0E0E0E] flex items-center justify-center px-4">
@@ -68,34 +104,7 @@ export default function Login() {
 
         {/* Form */}
         <div className="bg-[#1A1A1A] rounded-2xl p-8 border border-[#D4AF37]/20">
-          {/* Test Credentials Toggle */}
-          <div className="mb-6 text-center">
-            <button
-              type="button"
-              onClick={() => setShowTestCredentials(!showTestCredentials)}
-              className="text-xs text-[#B89C5A] hover:text-[#D4AF37] underline"
-            >
-              {showTestCredentials ? 'Hide' : 'Show'} Test Credentials
-            </button>
-            
-            {showTestCredentials && (
-              <div className="mt-4 p-4 bg-[#0E0E0E] rounded-lg border border-[#D4AF37]/20">
-                <p className="text-xs font-semibold text-[#D4AF37] mb-2">Test Credentials:</p>
-                <div className="text-xs text-[#B89C5A] space-y-2">
-                  <div>
-                    <p className="font-semibold text-[#F4EDE4]">Admin:</p>
-                    <p>Email: {TEST_CREDENTIALS.admin.email}</p>
-                    <p>Password: {TEST_CREDENTIALS.admin.password}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-[#F4EDE4]">Customer:</p>
-                    <p>Email: {TEST_CREDENTIALS.customers[0].email}</p>
-                    <p>Password: {TEST_CREDENTIALS.customers[0].password}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+
 
           {/* Login Messages */}
           {loginError && (
@@ -103,7 +112,7 @@ export default function Login() {
               <p className="text-sm text-red-400">{loginError}</p>
             </div>
           )}
-          
+
           {loginSuccess && (
             <div className="mb-4 p-3 bg-green-900/20 border border-green-500/20 rounded-lg">
               <p className="text-sm text-green-400">{loginSuccess}</p>
@@ -113,6 +122,23 @@ export default function Login() {
           <form onSubmit={handleLogin} className="space-y-6">
             {!isLogin && (
               <>
+                {/* Username (Required) */}
+                <div>
+                  <label className="block text-sm font-medium text-[#F4EDE4] mb-2">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
+                    <input
+                      type="text"
+                      name="username"
+                      required
+                      className="w-full pl-10 pr-4 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+                      placeholder="Choose a username"
+                    />
+                  </div>
+                </div>
+
                 {/* First Name and Last Name */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -123,6 +149,7 @@ export default function Login() {
                       <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
                       <input
                         type="text"
+                        name="firstName"
                         className="w-full pl-10 pr-4 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
                         placeholder="First name"
                       />
@@ -136,6 +163,7 @@ export default function Login() {
                       <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
                       <input
                         type="text"
+                        name="lastName"
                         className="w-full pl-10 pr-4 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
                         placeholder="Last name"
                       />
@@ -175,6 +203,7 @@ export default function Login() {
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
                     <input
                       type={showPassword ? "text" : "password"}
+                      name="password"
                       className="w-full pl-10 pr-12 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
                       placeholder="Create a strong password"
                     />
@@ -186,7 +215,7 @@ export default function Login() {
                       {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
                   </div>
-                  
+
                   {/* Password Requirements Tooltip */}
                   {showPasswordTooltip && (
                     <div className="absolute z-10 mt-2 p-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg shadow-lg">
@@ -211,6 +240,7 @@ export default function Login() {
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
                     <input
                       type={showConfirmPassword ? "text" : "password"}
+                      name="confirmPassword"
                       className="w-full pl-10 pr-12 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
                       placeholder="Confirm your password"
                     />
@@ -229,7 +259,7 @@ export default function Login() {
                   <label className="block text-sm font-medium text-[#F4EDE4] mb-2">
                     OTP Verification
                   </label>
-                  
+
                   {/* OTP Method Selection */}
                   <div className="mb-4">
                     <p className="text-xs text-[#B89C5A] mb-2">Send OTP via:</p>
@@ -368,9 +398,9 @@ export default function Login() {
                     />
                     <span className="ml-2 text-sm text-[#F4EDE4]">Remember me</span>
                   </label>
-                  <a href="#" className="text-sm text-[#D4AF37] hover:text-[#B89C5A]">
+                  <Link href="/forgot-password" className="text-sm text-[#D4AF37] hover:text-[#B89C5A]">
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
               </>
             )}
@@ -399,7 +429,7 @@ export default function Login() {
 
         {/* Back to Home */}
         <div className="mt-6 text-center">
-          <Link 
+          <Link
             href="/"
             className="text-sm text-[#B89C5A] hover:text-[#D4AF37] transition-colors"
           >
