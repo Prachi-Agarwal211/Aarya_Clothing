@@ -1,7 +1,45 @@
-# Aarya Clothing - Production Docker Compose
-# Microservices Architecture for VPS Deployment
+# Aarya Clothing - Production Docker Compose with SSL
+# VPS Deployment: 72.61.255.8 | Domain: aaryaclothing.cloud
 
 services:
+  # ============================================================
+  # NGINX REVERSE PROXY WITH SSL
+  # ============================================================
+  
+  nginx:
+    image: nginx:alpine
+    container_name: aarya_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - frontend
+      - core
+      - commerce
+      - payment
+    networks:
+      - frontend_network
+      - backend_network
+    restart: unless-stopped
+
+  # ============================================================
+  # CERTBOT FOR SSL CERTIFICATES
+  # ============================================================
+  
+  certbot:
+    image: certbot/certbot
+    container_name: aarya_certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    command: certonly --webroot --webroot-path=/var/www/certbot --email admin@aaryaclothing.cloud --agree-tos --no-eff-email -d aaryaclothing.cloud -d www.aaryaclothing.cloud
+    networks:
+      - frontend_network
+
   # ============================================================
   # DATABASE LAYER
   # ============================================================
@@ -12,13 +50,12 @@ services:
     environment:
       POSTGRES_DB: aarya_clothing
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_in_production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Root@2026}
       PGDATA: /var/lib/postgresql/data/pgdata
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d aarya_clothing"]
       interval: 10s
@@ -37,8 +74,6 @@ services:
     image: redis:7-alpine
     container_name: aarya_redis
     command: redis-server /etc/redis/redis.conf
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
       - ./docker/redis/redis.conf:/etc/redis/redis.conf:ro
@@ -52,8 +87,7 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  # CORE PLATFORM SERVICE (Port 8001)
-  # User Management + Authentication + Sessions
+  # CORE PLATFORM SERVICE (Internal Port 8001)
   # ============================================================
 
   core:
@@ -61,19 +95,17 @@ services:
       context: ./services/core
       dockerfile: Dockerfile
     container_name: aarya_core
-    ports:
-      - "8001:8001"
     environment:
       - SERVICE_NAME=core
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-Root@2026}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key}
+      - SECRET_KEY=${JWT_SECRET_KEY:-Root@2026_JWT_Secret_Key_Aarya_Clothing_2026_Production}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - REFRESH_TOKEN_EXPIRE_MINUTES=1440
       - SESSION_EXPIRE_MINUTES=1440
-      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
+      - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
     depends_on:
@@ -86,8 +118,7 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  # COMMERCE SERVICE (Port 8010)
-  # Product + Inventory + Cart + Order
+  # COMMERCE SERVICE (Internal Port 8010)
   # ============================================================
 
   commerce:
@@ -95,17 +126,15 @@ services:
       context: ./services/commerce
       dockerfile: Dockerfile
     container_name: aarya_commerce
-    ports:
-      - "8010:8010"
     environment:
       - SERVICE_NAME=commerce
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-Root@2026}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
       - CORE_PLATFORM_URL=http://core:8001
       - CART_TTL_HOURS=168
       - ORDER_TIMEOUT_MINUTES=15
-      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
+      - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
     depends_on:
@@ -120,8 +149,7 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  # PAYMENT SERVICE (Port 8020)
-  # Payment Processing + Fraud Detection
+  # PAYMENT SERVICE (Internal Port 8020)
   # ============================================================
 
   payment:
@@ -129,19 +157,17 @@ services:
       context: ./services/payment
       dockerfile: Dockerfile
     container_name: aarya_payment
-    ports:
-      - "8020:8020"
     environment:
       - SERVICE_NAME=payment
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-Root@2026}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
       - CORE_PLATFORM_URL=http://core:8001
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - PAYMENT_TIMEOUT_SECONDS=30
       - MAX_RETRY_ATTEMPTS=3
-      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
+      - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
     depends_on:
@@ -156,7 +182,7 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  # FRONTEND (Next.js - Port 3000)
+  # FRONTEND (Next.js - Internal Port 3000)
   # ============================================================
 
   frontend:
@@ -164,11 +190,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: aarya_frontend
-    ports:
-      - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://aaryaclothing.cloud}
     depends_on:
       - core
       - commerce
