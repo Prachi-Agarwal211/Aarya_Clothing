@@ -1,6 +1,6 @@
 """Promotion models for commerce service."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, Boolean, Text, Enum
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Boolean, Text, Enum, ForeignKey
 import enum
 from database.database import Base
 

@@ -167,59 +167,100 @@ Aarya_Clothing/
 
 ### 5.1 Core Platform (Port 8001)
 
+#### Authentication Endpoints
+```http
+POST /api/v1/auth/register          # User registration
+POST /api/v1/auth/login             # User login
+POST /api/v1/auth/refresh           # Token refresh
+POST /api/v1/auth/logout            # User logout
+POST /api/v1/auth/change-password   # Change password
+POST /api/v1/auth/forgot-password   # Request password reset
+POST /api/v1/auth/reset-password    # Reset password
 ```
-Authentication:
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-POST /api/v1/auth/refresh
-POST /api/v1/auth/logout
-POST /api/v1/auth/change-password
 
-OTP:
-POST /api/v1/auth/send-otp
-POST /api/v1/auth/verify-otp
-POST /api/v1/auth/resend-otp
+#### OTP Endpoints
+```http
+POST /api/v1/auth/send-otp          # Send OTP
+POST /api/v1/auth/verify-otp        # Verify OTP
+POST /api/v1/auth/resend-otp        # Resend OTP
+```
 
-Users:
-GET /api/v1/users/me
-PATCH /api/v1/users/me
-GET /api/v1/users/{user_id}
+#### User Endpoints
+```http
+GET /api/v1/users/me               # Get current user
+PATCH /api/v1/users/me             # Update current user
+GET /api/v1/users/{user_id}        # Get user by ID
+```
 
-Admin:
-GET /api/v1/admin/users
-PATCH /api/v1/admin/users/{user_id}/activate
-PATCH /api/v1/admin/users/{user_id}/deactivate
+#### Admin Endpoints
+```http
+GET /api/v1/admin/users            # List all users
+PATCH /api/v1/admin/users/{user_id}/activate    # Activate user
+PATCH /api/v1/admin/users/{user_id}/deactivate  # Deactivate user
 ```
 
 ### 5.2 Commerce Service (Port 8010)
 
+#### Product Endpoints
+```http
+GET /api/v1/products              # List products with pagination
+GET /api/v1/products/{product_id}  # Get product details
+POST /api/v1/products             # Create product (admin)
+PUT /api/v1/products/{product_id} # Update product (admin)
+DELETE /api/v1/products/{product_id} # Delete product (admin)
+GET /api/v1/products/search       # Search products
 ```
-Products:
-GET /api/v1/products
-GET /api/v1/products/{product_id}
-POST /api/v1/products
-PATCH /api/v1/products/{product_id}
 
-Cart:
-GET /api/v1/cart/{user_id}
-POST /api/v1/cart/{user_id}/add
-DELETE /api/v1/cart/{user_id}/remove/{product_id}
-DELETE /api/v1/cart/{user_id}/clear
+#### Category Endpoints
+```http
+GET /api/v1/categories            # List categories
+GET /api/v1/categories/tree       # Get category tree
+GET /api/v1/categories/{category_id} # Get category details
+POST /api/v1/categories          # Create category (admin)
+PUT /api/v1/categories/{category_id} # Update category (admin)
+DELETE /api/v1/categories/{category_id} # Delete category (admin)
+```
 
-Orders:
-POST /api/v1/orders
-GET /api/v1/orders/{user_id}
-GET /api/v1/orders/{order_id}/details
+#### Cart Endpoints
+```http
+GET /api/v1/cart/{user_id}       # Get user cart
+POST /api/v1/cart/{user_id}/add  # Add to cart
+PUT /api/v1/cart/{user_id}/item/{item_id} # Update cart item
+DELETE /api/v1/cart/{user_id}/item/{item_id} # Remove from cart
+DELETE /api/v1/cart/{user_id}     # Clear cart
+GET /api/v1/cart/guest/{cart_id} # Get guest cart
+POST /api/v1/cart/guest/{cart_id}/add # Add to guest cart
+```
+
+#### Order Endpoints
+```http
+POST /api/v1/orders               # Create order
+GET /api/v1/orders/{user_id}     # Get user orders
+GET /api/v1/orders/{order_id}    # Get order details
+PATCH /api/v1/orders/{order_id}/status # Update order status (admin)
+POST /api/v1/orders/{order_id}/cancel # Cancel order
 ```
 
 ### 5.3 Payment Service (Port 8020)
 
+#### Payment Endpoints
+```http
+POST /api/v1/payments/process     # Process payment
+GET /api/v1/payments/{transaction_id}/status # Get payment status
+POST /api/v1/payments/{transaction_id}/refund # Process refund
+GET /api/v1/payments/methods      # Get payment methods
+GET /api/v1/payments/history     # Get payment history
 ```
-Payments:
-POST /api/v1/payments/process
-POST /api/v1/payments/{transaction_id}/refund
-GET /api/v1/payments/{transaction_id}/status
-POST /api/v1/payments/verify
+
+#### Razorpay Endpoints
+```http
+POST /api/v1/payments/razorpay/create-order # Create Razorpay order
+POST /api/v1/payments/razorpay/verify # Verify Razorpay payment
+```
+
+#### Webhook Endpoints
+```http
+POST /api/v1/webhooks/razorpay   # Razorpay webhook handler
 ```
 
 ---

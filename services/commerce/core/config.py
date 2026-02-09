@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
     
+    # Security (shared with Core service for JWT verification)
+    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    ALGORITHM: str = "HS256"
+    
     # Logging
     LOG_LEVEL: str = "INFO"
     

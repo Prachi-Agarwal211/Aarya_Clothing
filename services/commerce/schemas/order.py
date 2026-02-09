@@ -43,6 +43,12 @@ class OrderItemResponse(BaseModel):
         from_attributes = True
 
 
+class OrderUpdate(BaseModel):
+    """Schema for updating an order."""
+    status: Optional[str] = None
+    shipping_address: Optional[str] = None
+
+
 class OrderResponse(BaseModel):
     """Order response schema."""
     id: int
