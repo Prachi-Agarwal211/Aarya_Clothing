@@ -1,0 +1,8 @@
+# Test dependencies for Aarya Clothing backend
+pytest>=7.4.0
+pytest-cov>=4.1.0
+httpx>=0.25.0
+unittest-mock>=1.4.0
+
+# Optional: For coverage reporting
+coverage>=7.3.0
