@@ -188,7 +188,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: base  # Use base for development with hot reload
     container_name: aarya_frontend_dev
     ports:
       - "3000:3000"
