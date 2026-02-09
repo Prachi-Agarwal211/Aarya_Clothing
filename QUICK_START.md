@@ -9,11 +9,24 @@ ssh root@72.61.255.8
 # 2. Navigate to project
 cd /opt/Aarya_Clothing
 
-# 3. Run deployment
-chmod +x setup-ssl.sh deploy-vps.sh health-check.sh && ./deploy-vps.sh
+# 3. Pull latest changes and deploy
+git pull origin testing && chmod +x *.sh && ./fix-and-redeploy.sh
 ```
 
 That's it! Your site will be live at **https://aaryaclothing.cloud**
+
+## 🔧 If Deployment Fails
+
+If you see errors about missing TypeScript or shell variables, run:
+
+```bash
+./fix-and-redeploy.sh
+```
+
+This script will:
+- Fix .env file special characters
+- Clean up failed builds
+- Rebuild and redeploy all services
 
 ---
 
