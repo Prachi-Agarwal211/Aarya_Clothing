@@ -187,8 +187,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-      target: deps
+      dockerfile: Dockerfile.dev
     container_name: aarya_frontend_dev
     ports:
       - "3000:3000"
@@ -210,9 +209,6 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-      - /app/.next
-    working_dir: /app
-    command: npm run dev
 
   # ============================================================
   # NGINX REVERSE PROXY (Optional - Port 80/443)
