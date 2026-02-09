@@ -5,42 +5,181 @@ import { Eye, EyeOff, User, Lock, Mail, Info, MessageCircle } from "lucide-react
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-// import { authenticateUser, TEST_CREDENTIALS } from "@/lib/credentials"; // Removing mock auth
+import { sendOTP, verifyOTP, resendOTP } from "@/lib/auth";
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPasswordTooltip, setShowPasswordTooltip] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
-  const [otpMethod, setOtpMethod] = useState('whatsapp'); // 'whatsapp' or 'email'
+  const [otpMethod, setOtpMethod] = useState('email'); // Only email is supported
+  const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpError, setOtpError] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loginError, setLoginError] = useState('');
   const [loginSuccess, setLoginSuccess] = useState('');
   const router = useRouter();
 
   const { login, register } = useAuth(); // Use auth hook
+  const [loading, setLoading] = useState(false); // Add loading state
+
+  // OTP Handlers
+  const handleSendOTP = async (email: string) => {
+    if (!email) {
+      setOtpError('Email is required for OTP verification');
+      return;
+    }
+
+    setOtpLoading(true);
+    setOtpError('');
+
+    try {
+      const result = await sendOTP(email, 'email_verification', 'verify');
+      if (result.success) {
+        setOtpSent(true);
+        setLoginSuccess(`OTP sent to ${email}`);
+      } else {
+        setOtpError(result.message || 'Failed to send OTP');
+      }
+    } catch (error: any) {
+      setOtpError(error.message || 'Failed to send OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (email: string) => {
+    const code = otpCode.join('');
+    if (code.length !== 6) {
+      setOtpError('Please enter the complete 6-digit code');
+      return;
+    }
+
+    if (!email) {
+      setOtpError('Email is required for OTP verification');
+      return;
+    }
+
+    setOtpLoading(true);
+    setOtpError('');
+
+    try {
+      const result = await verifyOTP(email, code, 'email_verification', 'verify');
+      if (result.success && result.data?.verified) {
+        setOtpVerified(true);
+        setLoginSuccess('OTP verified successfully!');
+        // Clear OTP inputs
+        setOtpCode(['', '', '', '']);
+      } else {
+        setOtpError(result.message || 'Invalid OTP code');
+      }
+    } catch (error: any) {
+      setOtpError(error.message || 'Failed to verify OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOTP = async (email: string) => {
+    if (!email) {
+      setOtpError('Email is required for OTP verification');
+      return;
+    }
+
+    setOtpLoading(true);
+    setOtpError('');
+
+    try {
+      const result = await resendOTP(email, 'email_verification', 'verify');
+      if (result.success) {
+        setLoginSuccess(`New OTP sent to ${email}`);
+        // Clear OTP inputs
+        setOtpCode(['', '', '', '']);
+      } else {
+        setOtpError(result.message || 'Failed to resend OTP');
+      }
+    } catch (error: any) {
+      setOtpError(error.message || 'Failed to resend OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleOTPInputChange = (index: number, value: string) => {
+    if (value.length <= 1 && /^\d*$/.test(value)) {
+      const newOtpCode = [...otpCode];
+      newOtpCode[index] = value;
+      setOtpCode(newOtpCode);
+      
+      // Auto-focus next input
+      if (value && index < 5) {
+        const nextInput = document.getElementById(`otp-input-${index + 1}`) as HTMLInputElement;
+        if (nextInput) nextInput.focus();
+      }
+    }
+  };
+
+  const handleOTPKeyDown = (index: number, e: React.KeyboardEvent) => {
+    // Handle backspace to go to previous input
+    if (e.key === 'Backspace' && !otpCode[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-input-${index - 1}`) as HTMLInputElement;
+      if (prevInput) prevInput.focus();
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setLoginSuccess('');
+    setLoading(true); // Add loading state
 
     const formData = new FormData(e.target as HTMLFormElement);
 
     if (isLogin) {
-      const email = formData.get('email') as string;
+      const username = formData.get('email') as string; // Login uses email as username
       const password = formData.get('password') as string;
       const rememberMe = (e.target as HTMLFormElement).querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked || false;
 
-      const result = await login(email, password, rememberMe);
+      // Basic validation
+      if (!username || !password) {
+        setLoginError('Please enter both email/username and password.');
+        setLoading(false);
+        return;
+      }
+
+      // Enhanced validation for login identifier
+      if (username.includes('@')) {
+        // Email validation
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username)) {
+          setLoginError('Please enter a valid email address.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Username validation
+        if (username.length < 3) {
+          setLoginError('Username must be at least 3 characters long.');
+          setLoading(false);
+          return;
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+          setLoginError('Username can only contain letters, numbers, and underscores.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const result = await login(username, password, rememberMe);
 
       if (result.success) {
         setLoginSuccess('Login successful! Redirecting...');
       } else {
-        setLoginError(result.message || 'Login failed');
+        setLoginError(result.message || 'Login failed. Please check your credentials.');
       }
     } else {
-      // Registration Logic
+      // Registration Logic with OTP
       const email = formData.get('email') as string;
       const password = formData.get('password') as string;
       const username = formData.get('username') as string;
@@ -48,10 +187,72 @@ export default function Login() {
       const lastName = formData.get('lastName') as string;
       const fullName = `${firstName} ${lastName}`.trim();
 
-      // Simple client-side validation
+      // Basic client-side validation
       if (!username || !email || !password) {
         setLoginError('Please fill in all required fields.');
+        setLoading(false);
         return;
+      }
+
+      if (!firstName || !lastName) {
+        setLoginError('Please enter your first and last name.');
+        setLoading(false);
+        return;
+      }
+
+      if (username.length < 3) {
+        setLoginError('Username must be at least 3 characters long.');
+        setLoading(false);
+        return;
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setLoginError('Please enter a valid email address.');
+        setLoading(false);
+        return;
+      }
+
+      // Get confirm password value
+      const confirmPassword = formData.get('confirmPassword') as string;
+      
+      if (password !== confirmPassword) {
+        setLoginError('Passwords do not match.');
+        setLoading(false);
+        return;
+      }
+
+      // Password validation
+      if (password.length < 8) {
+        setLoginError('Password must be at least 8 characters long.');
+        setLoading(false);
+        return;
+      }
+      
+      if (!/(?=.*[a-z])/.test(password)) {
+        setLoginError('Password must contain at least one lowercase letter.');
+        setLoading(false);
+        return;
+      }
+      
+      if (!/(?=.*[A-Z])/.test(password)) {
+        setLoginError('Password must contain at least one uppercase letter.');
+        setLoading(false);
+        return;
+      }
+      
+      if (!(/.*\d/.test(password))) {
+        setLoginError('Password must contain at least one number.');
+        setLoading(false);
+        return;
+      }
+
+      // OTP verification is now optional for registration
+      // Users can choose to verify email but it's not required
+      if (otpMethod === 'email' && !otpVerified) {
+        console.log('Proceeding without OTP verification (optional)');
+        // OTP is optional for basic registration - can be enabled later
+        // setLoginError('Please verify your email with OTP before registering.');
+        // return;
       }
 
       const result = await register({
@@ -63,12 +264,23 @@ export default function Login() {
       });
 
       if (result.success) {
-        setLoginSuccess('Account created! Please sign in.');
-        setTimeout(() => setIsLogin(true), 2000);
+        setLoginSuccess('Account created! Logging you in...');
+        // Auto-login after successful registration
+        setTimeout(async () => {
+          const loginResult = await login(email, password, false);
+          if (loginResult.success) {
+            setLoginSuccess('Registration successful! Redirecting...');
+          } else {
+            setLoginError('Account created but auto-login failed. Please login manually.');
+            setTimeout(() => setIsLogin(true), 2000);
+          }
+        }, 1500);
       } else {
-        setLoginError(result.message || 'Registration failed');
+        setLoginError(result.message || 'Registration failed. Please try again.');
       }
     }
+    
+    setLoading(false); // Reset loading state
   };
 
   // Effect to redirect when user is authenticated
@@ -180,6 +392,8 @@ export default function Login() {
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
                     <input
                       type="email"
+                      name="email"
+                      required
                       className="w-full pl-10 pr-4 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
                       placeholder="Enter your email address"
                     />
@@ -260,28 +474,23 @@ export default function Login() {
                     OTP Verification
                   </label>
 
-                  {/* OTP Method Selection */}
+                  {/* OTP Method Selection - Email Only */}
                   <div className="mb-4">
                     <p className="text-xs text-[#B89C5A] mb-2">Send OTP via:</p>
-                    <div className="flex space-x-4">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="otpMethod"
-                          value="whatsapp"
-                          checked={otpMethod === 'whatsapp'}
-                          onChange={(e) => setOtpMethod(e.target.value)}
-                          className="w-4 h-4 text-[#D4AF37] bg-[#0E0E0E] border-[#D4AF37]/20 focus:ring-[#D4AF37]"
-                        />
-                        <span className="ml-2 text-sm text-[#F4EDE4]">WhatsApp</span>
-                      </label>
+                    <div className="flex items-center">
                       <label className="flex items-center">
                         <input
                           type="radio"
                           name="otpMethod"
                           value="email"
                           checked={otpMethod === 'email'}
-                          onChange={(e) => setOtpMethod(e.target.value)}
+                          onChange={(e) => {
+                            setOtpMethod(e.target.value);
+                            setOtpSent(false);
+                            setOtpVerified(false);
+                            setOtpCode(['', '', '', '', '', '']);
+                            setOtpError('');
+                          }}
                           className="w-4 h-4 text-[#D4AF37] bg-[#0E0E0E] border-[#D4AF37]/20 focus:ring-[#D4AF37]"
                         />
                         <span className="ml-2 text-sm text-[#F4EDE4]">Email</span>
@@ -292,56 +501,85 @@ export default function Login() {
                   {!otpSent ? (
                     <button
                       type="button"
-                      onClick={() => setOtpSent(true)}
-                      className="w-full py-3 bg-[#D4AF37] text-black rounded-lg font-medium hover:bg-[#C9A24D] transition-colors"
+                      onClick={() => {
+                        const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+                        const email = emailInput?.value;
+                        handleSendOTP(email);
+                      }}
+                      disabled={otpLoading}
+                      className="w-full py-3 bg-[#D4AF37] text-black rounded-lg font-medium hover:bg-[#C9A24D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Send OTP to {otpMethod === 'whatsapp' ? 'WhatsApp' : 'Email Address'}
+                      {otpLoading ? 'Sending...' : 'Send OTP to Email Address'}
                     </button>
                   ) : (
                     <>
                       <div className="flex space-x-2 mb-3">
-                        <input
-                          type="text"
-                          maxLength={1}
-                          className="w-12 h-12 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                          placeholder="0"
-                        />
-                        <input
-                          type="text"
-                          maxLength={1}
-                          className="w-12 h-12 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                          placeholder="0"
-                        />
-                        <input
-                          type="text"
-                          maxLength={1}
-                          className="w-12 h-12 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                          placeholder="0"
-                        />
-                        <input
-                          type="text"
-                          maxLength={1}
-                          className="w-12 h-12 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                          placeholder="0"
-                        />
+                        {otpCode.map((digit, index) => (
+                          <input
+                            key={index}
+                            id={`otp-input-${index}`}
+                            type="text"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handleOTPInputChange(index, e.target.value)}
+                            onKeyDown={(e) => handleOTPKeyDown(index, e)}
+                            className="w-10 h-10 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+                            placeholder="0"
+                          />
+                        ))}
                       </div>
+                      
+                      {otpError && (
+                        <div className="mb-3 p-2 bg-red-900/20 border border-red-500/20 rounded-lg">
+                          <p className="text-xs text-red-400">{otpError}</p>
+                        </div>
+                      )}
+                      
                       <p className="text-xs text-[#B89C5A] mb-3">
-                        4-digit code sent to your {otpMethod}
+                        {otpVerified ? '✓ Email verified successfully!' : '6-digit code sent to your email'}
                       </p>
+                      
                       <div className="flex items-center justify-between">
                         <button
                           type="button"
-                          onClick={() => setOtpSent(false)}
+                          onClick={() => {
+                            setOtpSent(false);
+                            setOtpVerified(false);
+                            setOtpCode(['', '', '', '', '', '']);
+                            setOtpError('');
+                          }}
                           className="text-sm text-[#D4AF37] hover:text-[#B89C5A]"
                         >
-                          Change {otpMethod}
+                          Change Email
                         </button>
-                        <button
-                          type="button"
-                          className="text-sm text-[#D4AF37] hover:text-[#B89C5A]"
-                        >
-                          Resend OTP
-                        </button>
+                        <div className="flex space-x-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+                              const email = emailInput?.value;
+                              handleResendOTP(email);
+                            }}
+                            disabled={otpLoading}
+                            className="text-sm text-[#D4AF37] hover:text-[#B89C5A] disabled:opacity-50"
+                          >
+                            {otpLoading ? 'Sending...' : 'Resend OTP'}
+                          </button>
+                          {!otpVerified && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+                                const email = emailInput?.value;
+                                handleVerifyOTP(email);
+                              }}
+                              disabled={otpLoading}
+                              className="text-sm bg-[#D4AF37] text-black px-3 py-1 rounded font-medium hover:bg-[#C9A24D] disabled:opacity-50"
+                            >
+                              {otpLoading ? 'Verifying...' : 'Verify'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </>
                   )}
@@ -351,10 +589,10 @@ export default function Login() {
 
             {isLogin && (
               <>
-                {/* Email/Phone for Login */}
+                {/* Email/Username for Login */}
                 <div>
                   <label className="block text-sm font-medium text-[#F4EDE4] mb-2">
-                    Email Address or Phone Number
+                    Email Address or Username
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
@@ -362,7 +600,7 @@ export default function Login() {
                       type="text"
                       name="email"
                       className="w-full pl-10 pr-4 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                      placeholder="Enter your email or phone number"
+                      placeholder="Enter your email or username"
                     />
                   </div>
                 </div>
@@ -408,8 +646,9 @@ export default function Login() {
             <button
               type="submit"
               className="w-full btn-gold text-base font-medium"
+              disabled={loading}
             >
-              {isLogin ? 'Sign In' : 'Create Account'}
+              {loading ? (isLogin ? 'Signing In...' : 'Creating Account...') : (isLogin ? 'Sign In' : 'Create Account')}
             </button>
           </form>
 

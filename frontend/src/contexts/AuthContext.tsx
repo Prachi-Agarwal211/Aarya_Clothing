@@ -95,9 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await api.post<User>('/api/v1/auth/register', userData);
-      // Note: Registration might not auto-login depending on backend.
-      // Assuming it returns created user but doesn't set session cookies automatically unless specified.
-      return { success: true, message: 'Registration successful. Please login.' };
+      // Registration successful - user can now login
+      // Note: We don't auto-login here to let the login flow handle cookies properly
+      return { success: true, message: 'Registration successful! Please login.' };
     } catch (err: any) {
       const message = getErrorMessage(err);
       setError(message);
