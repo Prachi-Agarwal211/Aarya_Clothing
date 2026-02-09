@@ -61,8 +61,6 @@ services:
       context: ./services/core
       dockerfile: Dockerfile
     container_name: aarya_core
-    ports:
-      - "8001:8001"
     environment:
       - SERVICE_NAME=core
       - ENVIRONMENT=${ENVIRONMENT:-production}
@@ -73,7 +71,7 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - REFRESH_TOKEN_EXPIRE_MINUTES=1440
       - SESSION_EXPIRE_MINUTES=1440
-      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
+      - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
     depends_on:
@@ -95,8 +93,6 @@ services:
       context: ./services/commerce
       dockerfile: Dockerfile
     container_name: aarya_commerce
-    ports:
-      - "8010:8010"
     environment:
       - SERVICE_NAME=commerce
       - ENVIRONMENT=${ENVIRONMENT:-production}
@@ -105,7 +101,7 @@ services:
       - CORE_PLATFORM_URL=http://core:8001
       - CART_TTL_HOURS=168
       - ORDER_TIMEOUT_MINUTES=15
-      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
+      - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
     depends_on:
@@ -129,8 +125,6 @@ services:
       context: ./services/payment
       dockerfile: Dockerfile
     container_name: aarya_payment
-    ports:
-      - "8020:8020"
     environment:
       - SERVICE_NAME=payment
       - ENVIRONMENT=${ENVIRONMENT:-production}
@@ -141,7 +135,7 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - PAYMENT_TIMEOUT_SECONDS=30
       - MAX_RETRY_ATTEMPTS=3
-      - ALLOWED_ORIGINS=["http://localhost:3000","https://localhost:3000"]
+      - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
     depends_on:
@@ -164,16 +158,38 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: aarya_frontend
-    ports:
-      - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+      - NEXT_PUBLIC_API_URL=https://aaryaclothing.cloud/api
     depends_on:
       - core
       - commerce
     networks:
       - frontend_network
+    restart: unless-stopped
+
+  # ============================================================
+  # NGINX REVERSE PROXY (Ports 80, 443)
+  # Domain: aaryaclothing.cloud
+  # ============================================================
+
+  nginx:
+    image: nginx:alpine
+    container_name: aarya_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - core
+      - commerce
+      - payment
+    networks:
+      - frontend_network
+      - backend_network
     restart: unless-stopped
 
   # ============================================================
