@@ -2,9 +2,9 @@ import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestCo
 import Cookies from 'js-cookie';
 
 // API Configuration
-const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:8001';
-const COMMERCE_API_URL = process.env.NEXT_PUBLIC_COMMERCE_API_URL || 'http://localhost:8010';
-const PAYMENT_API_URL = process.env.NEXT_PUBLIC_PAYMENT_API_URL || 'http://localhost:8020';
+const CORE_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+const COMMERCE_API_URL = process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api', '')}/commerce` : 'http://localhost:8010';
+const PAYMENT_API_URL = process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api', '')}/payment` : 'http://localhost:8020';
 
 // Create Axios instance with default config
 export const api: AxiosInstance = axios.create({
