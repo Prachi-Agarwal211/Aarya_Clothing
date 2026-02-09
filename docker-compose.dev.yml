@@ -207,8 +207,8 @@ services:
       - aarya_network
     restart: unless-stopped
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
 
   # ============================================================
   # NGINX REVERSE PROXY (Optional - Port 80/443)
