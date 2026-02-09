@@ -187,7 +187,8 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+      target: runner
     container_name: aarya_frontend_dev
     ports:
       - "3000:3000"
