@@ -1,0 +1,260 @@
+# Aarya Clothing - Development Docker Compose
+# Complete development environment with all services
+
+version: '3.8'
+
+services:
+  # ============================================================
+  # DATABASE LAYER
+  # ============================================================
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: aarya_postgres_dev
+    environment:
+      POSTGRES_DB: aarya_clothing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aarya_clothing"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - aarya_network
+    restart: unless-stopped
+
+  # ============================================================
+  # CACHE & SESSION STORAGE
+  # ============================================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: aarya_redis_dev
+    command: redis-server --appendonly yes --requirepass redis123
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - aarya_network
+    restart: unless-stopped
+
+  # ============================================================
+  # CORE PLATFORM SERVICE (Port 8001)
+  # Authentication & User Management
+  # ============================================================
+
+  core:
+    build:
+      context: ./services/core
+      dockerfile: Dockerfile
+    container_name: aarya_core_dev
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVICE_NAME=core
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/aarya_clothing
+      - REDIS_URL=redis://:redis123@redis:6379/0
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - SECRET_KEY=dev-encryption-secret-key
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_MINUTES=1440
+      - SESSION_EXPIRE_MINUTES=1440
+      - ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:3001","http://127.0.0.1:3000"]
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=your-email@gmail.com
+      - SMTP_PASSWORD=your-app-password
+      - SMTP_FROM=noreply@aaryaclothing.com
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aarya_network
+    restart: unless-stopped
+    volumes:
+      - ./services/core:/app
+      - /app/__pycache__
+
+  # ============================================================
+  # COMMERCE SERVICE (Port 8010)
+  # Products, Cart & Orders
+  # ============================================================
+
+  commerce:
+    build:
+      context: ./services/commerce
+      dockerfile: Dockerfile
+    container_name: aarya_commerce_dev
+    ports:
+      - "8010:8010"
+    environment:
+      - SERVICE_NAME=commerce
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/aarya_clothing
+      - REDIS_URL=redis://:redis123@redis:6379/0
+      - CORE_SERVICE_URL=http://core:8001
+      - PAYMENT_SERVICE_URL=http://payment:8020
+      - CART_EXPIRE_MINUTES=10080
+      - GUEST_CART_EXPIRE_MINUTES=1440
+      - ORDER_TIMEOUT_MINUTES=30
+      - ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:3001","http://127.0.0.1:3000"]
+      - AWS_ACCESS_KEY_ID=your-aws-access-key
+      - AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+      - AWS_REGION=us-east-1
+      - S3_BUCKET_NAME=aarya-clothing-products
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
+    networks:
+      - aarya_network
+    restart: unless-stopped
+    volumes:
+      - ./services/commerce:/app
+      - /app/__pycache__
+
+  # ============================================================
+  # PAYMENT SERVICE (Port 8020)
+  # Payment Processing
+  # ============================================================
+
+  payment:
+    build:
+      context: ./services/payment
+      dockerfile: Dockerfile
+    container_name: aarya_payment_dev
+    ports:
+      - "8020:8020"
+    environment:
+      - SERVICE_NAME=payment
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/aarya_clothing
+      - REDIS_URL=redis://:redis123@redis:6379/0
+      - CORE_SERVICE_URL=http://core:8001
+      - RAZORPAY_KEY_ID=rzp_test_your_razorpay_key_id
+      - RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+      - STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+      - STRIPE_WEBHOOK_SECRET=whsec_your_stripe_webhook_secret
+      - PAYMENT_TIMEOUT_SECONDS=30
+      - MAX_RETRY_ATTEMPTS=3
+      - ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:3001","http://127.0.0.1:3000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
+    networks:
+      - aarya_network
+    restart: unless-stopped
+    volumes:
+      - ./services/payment:/app
+      - /app/__pycache__
+
+  # ============================================================
+  # FRONTEND (Next.js - Port 3000)
+  # React Application
+  # ============================================================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: base  # Use base for development with hot reload
+    container_name: aarya_frontend_dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      - NEXT_PUBLIC_COMMERCE_URL=http://localhost:8010
+      - NEXT_PUBLIC_PAYMENT_URL=http://localhost:8020
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - NEXT_PUBLIC_AWS_REGION=us-east-1
+      - NEXT_PUBLIC_S3_BUCKET=aarya-clothing-assets
+    depends_on:
+      - core
+      - commerce
+      - payment
+    networks:
+      - aarya_network
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+  # ============================================================
+  # NGINX REVERSE PROXY (Optional - Port 80/443)
+  # For production-like development
+  # ============================================================
+
+  nginx:
+    image: nginx:alpine
+    container_name: aarya_nginx_dev
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - core
+      - commerce
+      - payment
+    networks:
+      - aarya_network
+    restart: unless-stopped
+    profiles:
+      - with-nginx
+
+# ============================================================
+# NETWORK DEFINITIONS
+# ============================================================
+
+networks:
+  aarya_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================================
+# VOLUME DEFINITIONS
+# ============================================================
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
