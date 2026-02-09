@@ -34,6 +34,23 @@ Run this command on your VPS:
 
 This will install trusted Let's Encrypt certificates. See [`SSL_SETUP.md`](SSL_SETUP.md:1) for details.
 
+## 💾 Will Updates Delete My Database?
+
+**NO!** Your database is **safe** during updates. Your data is stored in Docker volumes that persist even when you rebuild containers.
+
+**Safe commands (database preserved):**
+- ✅ `git pull` - Updates code only
+- ✅ `docker-compose up -d --build` - Rebuilds containers, keeps data
+- ✅ `docker-compose restart` - Restarts services, keeps data
+- ✅ `./fix-and-redeploy.sh` - Updates everything, keeps data
+
+**Before major updates, backup your database:**
+```bash
+./backup-database.sh
+```
+
+See [`DATA_PERSISTENCE.md`](DATA_PERSISTENCE.md:1) for complete guide.
+
 ## 🔧 If Deployment Fails
 
 If you see errors about missing TypeScript or shell variables, run:
