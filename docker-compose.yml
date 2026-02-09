@@ -74,6 +74,20 @@ services:
       - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
+      # SMTP Configuration for OTP emails
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-razorrag.official@gmail.com}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-dbvn-cxml-ahoc-ndmy}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@aaryaclothings.com}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Aarya Clothings}
+      # OTP Settings
+      - OTP_CODE_LENGTH=6
+      - OTP_EXPIRY_MINUTES=10
+      - OTP_MAX_ATTEMPTS=3
+      - OTP_RESEND_COOLDOWN_MINUTES=1
+      - OTP_MAX_RESEND_PER_HOUR=5
     depends_on:
       postgres:
         condition: service_healthy
