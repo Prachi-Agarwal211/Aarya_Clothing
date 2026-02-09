@@ -1,6 +1,9 @@
-import type { Metadata } from "next";
+"use client";
+
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { metadata } from "./metadata";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -14,11 +17,6 @@ const inter = Inter({
   weight: ["300", "400", "500", "600"],
 });
 
-export const metadata: Metadata = {
-  title: "Aarya Clothings | Elegance Redefined",
-  description: "Discover the essence of royalty with Aarya Clothings. Premium ethnic and western wear for men and women.",
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -29,7 +27,9 @@ export default function RootLayout({
       <body
         className={`${playfair.variable} ${inter.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

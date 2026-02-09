@@ -1,9 +1,10 @@
-import axios, { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
 
 // API Configuration
 const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:8001';
 const COMMERCE_API_URL = process.env.NEXT_PUBLIC_COMMERCE_API_URL || 'http://localhost:8010';
+const PAYMENT_API_URL = process.env.NEXT_PUBLIC_PAYMENT_API_URL || 'http://localhost:8020';
 
 // Create Axios instance with default config
 export const api: AxiosInstance = axios.create({
@@ -21,6 +22,27 @@ export const commerceApi: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+export const paymentApi: AxiosInstance = axios.create({
+  baseURL: PAYMENT_API_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add Authorization header from cookie
+// This is needed because commerce/payment services expect Bearer token
+const addAuthHeader = (config: InternalAxiosRequestConfig) => {
+  const token = Cookies.get('access_token');
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+};
+
+commerceApi.interceptors.request.use(addAuthHeader);
+paymentApi.interceptors.request.use(addAuthHeader);
 
 // Response interceptor for error handling
 api.interceptors.response.use(

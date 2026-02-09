@@ -1,7 +1,7 @@
 """Authentication middleware for Commerce service."""
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
+from jose import jwt
 from typing import Optional
 from datetime import datetime, timedelta
 from core.config import settings

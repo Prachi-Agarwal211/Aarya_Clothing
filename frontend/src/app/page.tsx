@@ -5,21 +5,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { Search, User, ShoppingBag, Menu, X, Truck, Shield, Gift, LogOut } from "lucide-react";
 import ParallaxProvider from "./components/ParallaxProvider";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [navVisible, setNavVisible] = useState(true);
   const [categoriesDropdownOpen, setCategoriesDropdownOpen] = useState(false);
-
-  useEffect(() => {
-    // Check if user is logged in
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-  }, []);
+  const { user, isAuthenticated } = useAuth();
 
   // Auto-hide navigation on scroll
   useEffect(() => {
@@ -41,8 +34,8 @@ export default function Home() {
   }, [lastScrollY]);
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    setCurrentUser(null);
+    // Logout will be handled by AuthProvider
+    window.location.href = '/login';
   };
 
   // Load customizable categories from localStorage or use defaults
@@ -210,15 +203,15 @@ export default function Home() {
               <button className="p-2 text-[#F4EDE4] hover:text-[#D4AF37] transition-colors bg-[#0E0E0E]/50 backdrop-blur-sm rounded-lg">
                 <Search className="w-5 h-5" />
               </button>
-              {currentUser ? (
+              {user ? (
                 <div className="relative group">
                   <button className="p-2 text-[#F4EDE4] hover:text-[#D4AF37] transition-colors bg-[#0E0E0E]/50 backdrop-blur-sm rounded-lg hidden sm:block">
                     <User className="w-5 h-5" />
                   </button>
                   <div className="absolute right-0 mt-2 w-48 bg-[#1A1A1A] border border-[#D4AF37]/20 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                     <div className="p-4">
-                      <p className="text-sm font-medium text-[#F4EDE4] mb-1">{currentUser.name}</p>
-                      <p className="text-xs text-[#B89C5A] mb-3">{currentUser.email}</p>
+                      <p className="text-sm font-medium text-[#F4EDE4] mb-1">{user?.full_name || 'User'}</p>
+                      <p className="text-xs text-[#B89C5A] mb-3">{user.email}</p>
                       <div className="border-t border-[#D4AF37]/20 pt-3">
                         <button
                           onClick={handleLogout}

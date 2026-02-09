@@ -6,6 +6,7 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from fastapi import Request
 
 from core.config import settings
 from core.redis_client import redis_client
@@ -292,17 +293,22 @@ class AuthService:
     
     @staticmethod
     def get_current_user(
-        token: str = None,
-        request = None
+        request: Request = None
     ) -> Optional[User]:
         """Get current user from token."""
         from database.database import SessionLocal
+        from fastapi import HTTPException, status
         
-        if not token and request:
+        token = None
+        if request:
             token = request.cookies.get("access_token")
         
         if not token:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
         try:
             payload = jwt.decode(
@@ -312,24 +318,40 @@ class AuthService:
             )
             
             if payload.get("type") != "access":
-                return None
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token type",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
             
             user_id = int(payload.get("sub"))
             
             # Check if token is blacklisted
             if redis_client.is_blacklisted(token):
-                return None
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token is blacklisted",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
             
             db = SessionLocal()
             user = db.query(User).filter(User.id == user_id).first()
             
             if not user or not user.is_active:
-                return None
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User not found or inactive",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
             
             return user
         
         except JWTError:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     
     # ==================== Password Reset ====================
     
