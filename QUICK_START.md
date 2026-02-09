@@ -15,6 +15,25 @@ git pull origin testing && chmod +x *.sh && ./fix-and-redeploy.sh
 
 That's it! Your site will be live at **https://aaryaclothing.cloud**
 
+## ⚠️ SSL Security Warning
+
+You may see a browser security warning: **"Your connection isn't private"** or **"net::ERR_CERT_AUTHORITY_INVALID"**
+
+**This is NORMAL and SAFE!** Your site uses self-signed SSL certificates for testing.
+
+### To Access Your Site Now:
+1. Click **"Advanced"**
+2. Click **"Proceed to aaryaclothing.cloud (unsafe)"**
+3. Your site will load perfectly
+
+### For Production SSL (No Warnings):
+Run this command on your VPS:
+```bash
+./setup-letsencrypt.sh your-email@example.com
+```
+
+This will install trusted Let's Encrypt certificates. See [`SSL_SETUP.md`](SSL_SETUP.md:1) for details.
+
 ## 🔧 If Deployment Fails
 
 If you see errors about missing TypeScript or shell variables, run:
