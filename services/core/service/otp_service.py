@@ -60,23 +60,46 @@ class OTPService:
         # Store OTP in Redis (with short expiry)
         redis_client.set_otp(otp_key, otp_code, expires_in=settings.OTP_EXPIRY_MINUTES * 60)
         
-        # Send OTP via email if email provided
-        if email:
+        # Send OTP based on type
+        if email and otp_type == "EMAIL":
             email_service.send_otp_email(
                 to_email=email,
                 otp_code=otp_code,
                 purpose=purpose or "verification"
             )
+            delivery_target = email
+        elif phone and otp_type == "WHATSAPP":
+            # Import here to avoid circular import
+            from core.config import settings
+            
+            if not settings.whatsapp_enabled:
+                raise ValueError("WhatsApp OTP is not configured. Please contact support.")
+            
+            from service.whatsapp_service import whatsapp_service
+            
+            if whatsapp_service is None:
+                raise ValueError("WhatsApp service is not available")
+            
+            result = whatsapp_service.send_otp(
+                phone_number=phone,
+                otp_code=otp_code,
+                purpose=purpose or "verification"
+            )
+            
+            if not result.get("success"):
+                raise ValueError(f"Failed to send WhatsApp OTP: {result.get('error', 'Unknown error')}")
+            
+            delivery_target = phone
         else:
-            # Phone OTP - log for now (WhatsApp integration pending)
-            print(f"[OTP] Would send to {phone}: {otp_code}")
+            raise ValueError(f"Invalid OTP type '{otp_type}' or missing email/phone")
         
         return {
             "success": True,
-            "message": f"OTP sent successfully to {email or phone}",
+            "message": f"OTP sent successfully to {delivery_target}",
             "expires_in": settings.OTP_EXPIRY_MINUTES * 60,
             "email": email,
-            "phone": phone
+            "phone": phone,
+            "otp_type": otp_type
         }
     
     def verify_otp(self, request) -> dict:

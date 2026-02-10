@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
     
     # Cookie Settings
-    COOKIE_SECURE: bool = True
+    COOKIE_SECURE: bool = False  # Should be True in production with HTTPS
     COOKIE_HTTPONLY: bool = True
     COOKIE_SAMESITE: str = "lax"
     
@@ -69,6 +69,21 @@ class Settings(BaseSettings):
     SMTP_TLS: bool = True
     EMAIL_FROM: str = "noreply@aaryaclothings.com"
     EMAIL_FROM_NAME: str = "Aarya Clothings"
+    
+    # WhatsApp Business API Configuration
+    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
+    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = None
+    WHATSAPP_ACCESS_TOKEN: Optional[str] = None
+    WHATSAPP_API_VERSION: str = "v18.0"
+    
+    @property
+    def whatsapp_enabled(self) -> bool:
+        """Check if WhatsApp integration is enabled."""
+        return bool(
+            self.WHATSAPP_BUSINESS_ACCOUNT_ID and
+            self.WHATSAPP_PHONE_NUMBER_ID and
+            self.WHATSAPP_ACCESS_TOKEN
+        )
     
     # Password Reset Settings
     PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 24

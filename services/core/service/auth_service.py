@@ -356,6 +356,8 @@ class AuthService:
     # ==================== Password Reset ====================
     
     def request_password_reset(self, email: str, frontend_url: str = "http://localhost:3000") -> Dict[str, Any]:
+        """Request password reset via email link (deprecated - use OTP method)."""
+        # This method is kept for backward compatibility
         """Request password reset - generates token and sends email."""
         # Rate limiting
         rate_limit = redis_client.check_rate_limit(

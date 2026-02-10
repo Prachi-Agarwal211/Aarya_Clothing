@@ -12,7 +12,7 @@ services:
     environment:
       POSTGRES_DB: aarya_clothing
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_in_production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_password_in_production}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
@@ -64,7 +64,7 @@ services:
     environment:
       - SERVICE_NAME=core
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change_this_password_in_production}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key}
       - ALGORITHM=HS256
@@ -74,6 +74,21 @@ services:
       - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
+      # Password Policy
+      - PASSWORD_MIN_LENGTH=${PASSWORD_MIN_LENGTH:-8}
+      - PASSWORD_REQUIRE_UPPERCASE=${PASSWORD_REQUIRE_UPPERCASE:-true}
+      - PASSWORD_REQUIRE_LOWERCASE=${PASSWORD_REQUIRE_LOWERCASE:-true}
+      - PASSWORD_REQUIRE_NUMBER=${PASSWORD_REQUIRE_NUMBER:-true}
+      - PASSWORD_REQUIRE_SPECIAL=${PASSWORD_REQUIRE_SPECIAL:-false}
+      # Rate Limiting & Security
+      - LOGIN_RATE_LIMIT=${LOGIN_RATE_LIMIT:-5}
+      - LOGIN_RATE_WINDOW=${LOGIN_RATE_WINDOW:-300}
+      - MAX_LOGIN_ATTEMPTS=${MAX_LOGIN_ATTEMPTS:-5}
+      - ACCOUNT_LOCKOUT_MINUTES=${ACCOUNT_LOCKOUT_MINUTES:-30}
+      # Cookie Settings
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - COOKIE_HTTPONLY=true
+      - COOKIE_SAMESITE=lax
       # SMTP Configuration for OTP emails
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -83,11 +98,16 @@ services:
       - EMAIL_FROM=${EMAIL_FROM:-noreply@aaryaclothings.com}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Aarya Clothings}
       # OTP Settings
-      - OTP_CODE_LENGTH=6
-      - OTP_EXPIRY_MINUTES=10
-      - OTP_MAX_ATTEMPTS=3
-      - OTP_RESEND_COOLDOWN_MINUTES=1
-      - OTP_MAX_RESEND_PER_HOUR=5
+      - OTP_CODE_LENGTH=${OTP_CODE_LENGTH:-6}
+      - OTP_EXPIRY_MINUTES=${OTP_EXPIRY_MINUTES:-10}
+      - OTP_MAX_ATTEMPTS=${OTP_MAX_ATTEMPTS:-3}
+      - OTP_RESEND_COOLDOWN_MINUTES=${OTP_RESEND_COOLDOWN_MINUTES:-1}
+      - OTP_MAX_RESEND_PER_HOUR=${OTP_MAX_RESEND_PER_HOUR:-5}
+      # WhatsApp Business API
+      - WHATSAPP_BUSINESS_ACCOUNT_ID=${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN:-}
+      - WHATSAPP_API_VERSION=${WHATSAPP_API_VERSION:-v18.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -110,7 +130,7 @@ services:
     environment:
       - SERVICE_NAME=commerce
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change_this_password_in_production}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
       - CORE_PLATFORM_URL=http://core:8001
       - CART_TTL_HOURS=168
@@ -118,6 +138,16 @@ services:
       - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
+      # R2 Storage Configuration
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-aarya-clothing-images}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
+      - R2_REGION=${R2_REGION:-auto}
+      # JWT Verification (shared with Core)
+      - SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key}
+      - ALGORITHM=HS256
     depends_on:
       postgres:
         condition: service_healthy
@@ -142,13 +172,21 @@ services:
     environment:
       - SERVICE_NAME=payment
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change}@postgres:5432/aarya_clothing
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change_this_password_in_production}@postgres:5432/aarya_clothing
       - REDIS_URL=redis://redis:6379/0
       - CORE_PLATFORM_URL=http://core:8001
+      # Stripe Configuration
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      # Razorpay Configuration (Primary for India)
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-}
+      # Payment Settings
       - PAYMENT_TIMEOUT_SECONDS=30
       - MAX_RETRY_ATTEMPTS=3
+      - PAYMENT_SUCCESS_URL=${PAYMENT_SUCCESS_URL:-https://aaryaclothing.cloud/payment/success}
+      - PAYMENT_FAILURE_URL=${PAYMENT_FAILURE_URL:-https://aaryaclothing.cloud/payment/failure}
       - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO

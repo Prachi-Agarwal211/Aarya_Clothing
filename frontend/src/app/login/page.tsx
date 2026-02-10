@@ -12,7 +12,7 @@ export default function Login() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPasswordTooltip, setShowPasswordTooltip] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
-  const [otpMethod, setOtpMethod] = useState('email'); // Only email is supported
+  const [otpMethod, setOtpMethod] = useState<'EMAIL' | 'WHATSAPP'>('EMAIL');
   const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
@@ -112,7 +112,7 @@ export default function Login() {
       const newOtpCode = [...otpCode];
       newOtpCode[index] = value;
       setOtpCode(newOtpCode);
-      
+
       // Auto-focus next input
       if (value && index < 5) {
         const nextInput = document.getElementById(`otp-input-${index + 1}`) as HTMLInputElement;
@@ -214,7 +214,7 @@ export default function Login() {
 
       // Get confirm password value
       const confirmPassword = formData.get('confirmPassword') as string;
-      
+
       if (password !== confirmPassword) {
         setLoginError('Passwords do not match.');
         setLoading(false);
@@ -227,19 +227,19 @@ export default function Login() {
         setLoading(false);
         return;
       }
-      
+
       if (!/(?=.*[a-z])/.test(password)) {
         setLoginError('Password must contain at least one lowercase letter.');
         setLoading(false);
         return;
       }
-      
+
       if (!/(?=.*[A-Z])/.test(password)) {
         setLoginError('Password must contain at least one uppercase letter.');
         setLoading(false);
         return;
       }
-      
+
       if (!(/.*\d/.test(password))) {
         setLoginError('Password must contain at least one number.');
         setLoading(false);
@@ -279,7 +279,7 @@ export default function Login() {
         setLoginError(result.message || 'Registration failed. Please try again.');
       }
     }
-    
+
     setLoading(false); // Reset loading state
   };
 
@@ -474,208 +474,198 @@ export default function Login() {
                     OTP Verification
                   </label>
 
-                  {/* OTP Method Selection - Email Only */}
-                  <div className="mb-4">
-                    <p className="text-xs text-[#B89C5A] mb-2">Send OTP via:</p>
-                    <div className="flex items-center">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="otpMethod"
-                          value="email"
-                          checked={otpMethod === 'email'}
-                          onChange={(e) => {
-                            setOtpMethod(e.target.value);
-                            setOtpSent(false);
-                            setOtpVerified(false);
-                            setOtpCode(['', '', '', '', '', '']);
-                            setOtpError('');
+                  setOtpVerified(false);
+                  setOtpCode(['', '', '', '', '', '']);
+                  setOtpError('');
                           }}
-                          className="w-4 h-4 text-[#D4AF37] bg-[#0E0E0E] border-[#D4AF37]/20 focus:ring-[#D4AF37]"
+                  className="w-4 h-4 text-[#D4AF37] bg-[#0E0E0E] border-[#D4AF37]/20 focus:ring-[#D4AF37]"
                         />
-                        <span className="ml-2 text-sm text-[#F4EDE4]">Email</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {!otpSent ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
-                        const email = emailInput?.value;
-                        handleSendOTP(email);
-                      }}
-                      disabled={otpLoading}
-                      className="w-full py-3 bg-[#D4AF37] text-black rounded-lg font-medium hover:bg-[#C9A24D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {otpLoading ? 'Sending...' : 'Send OTP to Email Address'}
-                    </button>
-                  ) : (
-                    <>
-                      <div className="flex space-x-2 mb-3">
-                        {otpCode.map((digit, index) => (
-                          <input
-                            key={index}
-                            id={`otp-input-${index}`}
-                            type="text"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) => handleOTPInputChange(index, e.target.value)}
-                            onKeyDown={(e) => handleOTPKeyDown(index, e)}
-                            className="w-10 h-10 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                            placeholder="0"
-                          />
-                        ))}
-                      </div>
-                      
-                      {otpError && (
-                        <div className="mb-3 p-2 bg-red-900/20 border border-red-500/20 rounded-lg">
-                          <p className="text-xs text-red-400">{otpError}</p>
-                        </div>
-                      )}
-                      
-                      <p className="text-xs text-[#B89C5A] mb-3">
-                        {otpVerified ? '✓ Email verified successfully!' : '6-digit code sent to your email'}
-                      </p>
-                      
-                      <div className="flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOtpSent(false);
-                            setOtpVerified(false);
-                            setOtpCode(['', '', '', '', '', '']);
-                            setOtpError('');
-                          }}
-                          className="text-sm text-[#D4AF37] hover:text-[#B89C5A]"
-                        >
-                          Change Email
-                        </button>
-                        <div className="flex space-x-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
-                              const email = emailInput?.value;
-                              handleResendOTP(email);
-                            }}
-                            disabled={otpLoading}
-                            className="text-sm text-[#D4AF37] hover:text-[#B89C5A] disabled:opacity-50"
-                          >
-                            {otpLoading ? 'Sending...' : 'Resend OTP'}
-                          </button>
-                          {!otpVerified && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
-                                const email = emailInput?.value;
-                                handleVerifyOTP(email);
-                              }}
-                              disabled={otpLoading}
-                              className="text-sm bg-[#D4AF37] text-black px-3 py-1 rounded font-medium hover:bg-[#C9A24D] disabled:opacity-50"
-                            >
-                              {otpLoading ? 'Verifying...' : 'Verify'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-
-            {isLogin && (
-              <>
-                {/* Email/Username for Login */}
-                <div>
-                  <label className="block text-sm font-medium text-[#F4EDE4] mb-2">
-                    Email Address or Username
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
-                    <input
-                      type="text"
-                      name="email"
-                      className="w-full pl-10 pr-4 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                      placeholder="Enter your email or username"
-                    />
-                  </div>
-                </div>
-
-                {/* Password for Login */}
-                <div>
-                  <label className="block text-sm font-medium text-[#F4EDE4] mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      name="password"
-                      className="w-full pl-10 pr-12 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                      placeholder="Enter your password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#B89C5A] hover:text-[#D4AF37]"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 text-[#D4AF37] bg-[#0E0E0E] border-[#D4AF37]/20 rounded focus:ring-[#D4AF37]"
-                    />
-                    <span className="ml-2 text-sm text-[#F4EDE4]">Remember me</span>
-                  </label>
-                  <Link href="/forgot-password" className="text-sm text-[#D4AF37] hover:text-[#B89C5A]">
-                    Forgot password?
-                  </Link>
-                </div>
-              </>
-            )}
-
-            <button
-              type="submit"
-              className="w-full btn-gold text-base font-medium"
-              disabled={loading}
-            >
-              {loading ? (isLogin ? 'Signing In...' : 'Creating Account...') : (isLogin ? 'Sign In' : 'Create Account')}
-            </button>
-          </form>
-
-          {/* Switch between Login/Register */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-[#B89C5A]">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-[#D4AF37] hover:text-[#B89C5A] font-medium"
-              >
-                {isLogin ? 'Sign Up' : 'Sign In'}
-              </button>
-            </p>
-          </div>
+                  <span className="ml-2 text-sm text-[#F4EDE4]">Email</span>
+                </label>
+              </div>
         </div>
 
-        {/* Back to Home */}
-        <div className="mt-6 text-center">
-          <Link
-            href="/"
-            className="text-sm text-[#B89C5A] hover:text-[#D4AF37] transition-colors"
+        {!otpSent ? (
+          <button
+            type="button"
+            onClick={() => {
+              const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+              const email = emailInput?.value;
+              handleSendOTP(email);
+            }}
+            disabled={otpLoading}
+            className="w-full py-3 bg-[#D4AF37] text-black rounded-lg font-medium hover:bg-[#C9A24D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            ← Back to Home
-          </Link>
+            {otpLoading ? 'Sending...' : 'Send OTP to Email Address'}
+          </button>
+        ) : (
+          <>
+            <div className="flex space-x-2 mb-3">
+              {otpCode.map((digit, index) => (
+                <input
+                  key={index}
+                  id={`otp-input-${index}`}
+                  type="text"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOTPInputChange(index, e.target.value)}
+                  onKeyDown={(e) => handleOTPKeyDown(index, e)}
+                  className="w-10 h-10 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+                  placeholder="0"
+                />
+              ))}
+            </div>
+
+            {otpError && (
+              <div className="mb-3 p-2 bg-red-900/20 border border-red-500/20 rounded-lg">
+                <p className="text-xs text-red-400">{otpError}</p>
+              </div>
+            )}
+
+            <p className="text-xs text-[#B89C5A] mb-3">
+              {otpVerified ? '✓ Email verified successfully!' : '6-digit code sent to your email'}
+            </p>
+
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtpVerified(false);
+                  setOtpCode(['', '', '', '', '', '']);
+                  setOtpError('');
+                }}
+                className="text-sm text-[#D4AF37] hover:text-[#B89C5A]"
+              >
+                Change Email
+              </button>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+                    const email = emailInput?.value;
+                    handleResendOTP(email);
+                  }}
+                  disabled={otpLoading}
+                  className="text-sm text-[#D4AF37] hover:text-[#B89C5A] disabled:opacity-50"
+                >
+                  {otpLoading ? 'Sending...' : 'Resend OTP'}
+                </button>
+                {!otpVerified && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+                      const email = emailInput?.value;
+                      handleVerifyOTP(email);
+                    }}
+                    disabled={otpLoading}
+                    className="text-sm bg-[#D4AF37] text-black px-3 py-1 rounded font-medium hover:bg-[#C9A24D] disabled:opacity-50"
+                  >
+                    {otpLoading ? 'Verifying...' : 'Verify'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
+{
+  isLogin && (
+    <>
+      {/* Email/Username for Login */}
+      <div>
+        <label className="block text-sm font-medium text-[#F4EDE4] mb-2">
+          Email Address or Username
+        </label>
+        <div className="relative">
+          <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
+          <input
+            type="text"
+            name="email"
+            className="w-full pl-10 pr-4 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+            placeholder="Enter your email or username"
+          />
         </div>
       </div>
-    </div>
+
+      {/* Password for Login */}
+      <div>
+        <label className="block text-sm font-medium text-[#F4EDE4] mb-2">
+          Password
+        </label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#B89C5A]" />
+          <input
+            type={showPassword ? "text" : "password"}
+            name="password"
+            className="w-full pl-10 pr-12 py-3 bg-[#0E0E0E] border border-[#D4AF37]/20 rounded-lg text-[#F4EDE4] placeholder-[#B89C5A] focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+            placeholder="Enter your password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#B89C5A] hover:text-[#D4AF37]"
+          >
+            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="flex items-center">
+          <input
+            type="checkbox"
+            className="w-4 h-4 text-[#D4AF37] bg-[#0E0E0E] border-[#D4AF37]/20 rounded focus:ring-[#D4AF37]"
+          />
+          <span className="ml-2 text-sm text-[#F4EDE4]">Remember me</span>
+        </label>
+        <Link href="/forgot-password" className="text-sm text-[#D4AF37] hover:text-[#B89C5A]">
+          Forgot password?
+        </Link>
+      </div>
+    </>
+  )
+}
+
+<button
+  type="submit"
+  className="w-full btn-gold text-base font-medium"
+  disabled={loading}
+>
+  {loading ? (isLogin ? 'Signing In...' : 'Creating Account...') : (isLogin ? 'Sign In' : 'Create Account')}
+</button>
+          </form >
+
+  {/* Switch between Login/Register */ }
+  < div className = "mt-6 text-center" >
+    <p className="text-sm text-[#B89C5A]">
+      {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+      <button
+        onClick={() => setIsLogin(!isLogin)}
+        className="text-[#D4AF37] hover:text-[#B89C5A] font-medium"
+      >
+        {isLogin ? 'Sign Up' : 'Sign In'}
+      </button>
+    </p>
+          </div >
+        </div >
+
+  {/* Back to Home */ }
+  < div className = "mt-6 text-center" >
+    <Link
+      href="/"
+      className="text-sm text-[#B89C5A] hover:text-[#D4AF37] transition-colors"
+    >
+      ← Back to Home
+    </Link>
+        </div >
+      </div >
+    </div >
   );
 }
