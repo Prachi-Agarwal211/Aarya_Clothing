@@ -17,6 +17,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request, Background
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import Optional
 
 from core.config import settings
@@ -44,89 +45,36 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     init_db()
-    
+
     # Verify Redis connection
     if redis_client.ping():
         print("✓ Redis connected")
     else:
         print("✗ Redis connection failed")
-    
+
     yield
-    
+
     # Shutdown
     pass
 
 
-@app.post("/api/v1/auth/forgot-password-otp", status_code=status.HTTP_200_OK,
-          tags=["Authentication"])
-async def forgot_password_otp(
-    identifier: str,
-    otp_type: str = "EMAIL",
-    db: Session = Depends(get_db)
-):
-    """
-    Request password reset OTP (Email or WhatsApp).
-    
-    Args:
-        identifier: Email address or phone number
-        otp_type: 'EMAIL' or 'WHATSAPP'
-    
-    Returns:
-        Success message
-    """
-    auth_service = AuthService(db)
-    
-    try:
-        result = auth_service.request_password_reset_otp(identifier, otp_type)
-        return result
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+# ==================== FastAPI App ====================
 
+app = FastAPI(
+    title="Aarya Clothing - Core Platform",
+    description="User Management, Authentication, Cookie Sessions, OTP Verification",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
-@app.post("/api/v1/auth/reset-password-otp", status_code=status.HTTP_200_OK,
-          tags=["Authentication"])
-async def reset_password_otp(
-    identifier: str,
-    otp_code: str,
-    new_password: str,
-    otp_type: str = "EMAIL",
-    db: Session = Depends(get_db)
-):
-    """
-    Reset password using OTP verification.
-    
-    Args:
-        identifier: Email address or phone number
-        otp_code: 6-digit OTP code
-        new_password: New password
-        otp_type: 'EMAIL' or 'WHATSAPP'
-    
-    Returns:
-        Success message
-    """
-    auth_service = AuthService(db)
-    
-    try:
-        result = auth_service.reset_password_with_otp(
-            identifier=identifier,
-            otp_code=otp_code,
-            new_password=new_password,
-            otp_type=otp_type
-        )
-        return result
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reset password"
-        )
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ==================== Cookie Helper ====================
@@ -632,6 +580,115 @@ async def deactivate_user(
     auth_service.logout_all(user.id)
     
     return user
+
+
+# ==================== Admin Role Management Routes ====================
+
+@app.post("/api/v1/admin/users", response_model=UserResponse,
+          status_code=status.HTTP_201_CREATED,
+          tags=["Admin"])
+async def create_user_by_admin(
+    user_data: UserCreate,
+    current_user: User = Depends(AuthService.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new user (admin only). Used for creating staff accounts."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+
+    # Admin can create users with specific roles
+    auth_service = AuthService(db)
+    
+    # Validate password
+    valid, errors = auth_service.validate_password(user_data.password)
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="; ".join(errors)
+        )
+
+    # Check if user exists
+    if db.query(User).filter(
+        or_(User.email == user_data.email, User.username == user_data.username)
+    ).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email or username already exists"
+        )
+
+    user = User(
+        email=user_data.email,
+        username=user_data.username,
+        full_name=user_data.full_name,
+        hashed_password=auth_service.get_password_hash(user_data.password),
+        phone=getattr(user_data, 'phone', None),
+        role=user_data.role  # Allow admin to assign role
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+@app.patch("/api/v1/admin/users/{user_id}/role", response_model=UserResponse,
+           tags=["Admin"])
+async def update_user_role(
+    user_id: int,
+    new_role: UserRole,
+    current_user: User = Depends(AuthService.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user role (admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Prevent demoting oneself
+    if user.id == current_user.id and new_role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin cannot change their own role"
+        )
+
+    user.role = new_role
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+@app.get("/api/v1/admin/users/role/{role}", response_model=list[UserResponse],
+         tags=["Admin"])
+async def list_users_by_role(
+    role: UserRole,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(AuthService.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List users by role (admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+
+    users = db.query(User).filter(User.role == role).offset(skip).limit(limit).all()
+    return users
 
 
 # ==================== Run Server ====================

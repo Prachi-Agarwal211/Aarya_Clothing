@@ -67,25 +67,21 @@ class AuthService:
         valid, errors = self.validate_password(user_data.password)
         if not valid:
             raise ValueError("; ".join(errors))
-        
+
         # Check if user exists
         if self.db.query(User).filter(
             or_(User.email == user_data.email, User.username == user_data.username)
         ).first():
             raise ValueError("User with this email or username already exists")
-        
-        # Create user with role
-        role = getattr(user_data, 'role', UserRole.CUSTOMER)
-        if isinstance(role, str):
-            role = UserRole(role)
-        
+
+        # Create user with default customer role - prevent role assignment during registration
         user = User(
             email=user_data.email,
             username=user_data.username,
             full_name=user_data.full_name,
             hashed_password=self.get_password_hash(user_data.password),
             phone=getattr(user_data, 'phone', None),
-            role=role
+            role=UserRole.CUSTOMER  # Always assign customer role during registration
         )
         
         self.db.add(user)
@@ -456,8 +452,126 @@ class AuthService:
             "message": "Password has been reset successfully. Please login with your new password."
         }
     
+    # ==================== Password Reset with OTP ====================
+
+    def request_password_reset_otp(self, identifier: str, otp_type: str = "EMAIL") -> Dict[str, Any]:
+        """Request password reset via OTP (Email or WhatsApp)."""
+        # Rate limiting
+        rate_limit = redis_client.check_rate_limit(
+            f"password_reset_otp:{identifier}",
+            limit=settings.PASSWORD_RESET_RATE_LIMIT,
+            window=settings.PASSWORD_RESET_RATE_WINDOW
+        )
+
+        if not rate_limit["allowed"]:
+            raise ValueError("Too many password reset requests. Please try again later.")
+
+        # Find user by email or phone
+        if "@" in identifier:
+            # Email lookup
+            user = self.get_user_by_email(identifier)
+        else:
+            # Phone lookup (assuming phone field exists)
+            user = self.db.query(User).filter(User.phone == identifier).first()
+
+        if not user:
+            # Don't reveal if user exists - still return success
+            return {
+                "success": True,
+                "message": "If an account with this identifier exists, an OTP has been sent."
+            }
+
+        if not user.is_active:
+            return {
+                "success": True,
+                "message": "If an account with this identifier exists, an OTP has been sent."
+            }
+
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        expires = datetime.utcnow() + timedelta(hours=settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS)
+
+        # Store token in database
+        user.password_reset_token = reset_token
+        user.password_reset_expires = expires
+        self.db.commit()
+
+        # Use OTP service to send the code
+        from service.otp_service import OTPService
+        otp_service = OTPService(self.db)
+
+        otp_request = type('OtpRequest', (), {})()
+        if "@" in identifier:
+            otp_request.email = identifier
+            otp_request.phone = None
+        else:
+            otp_request.email = None
+            otp_request.phone = identifier
+        
+        otp_request.otp_type = otp_type
+        otp_request.purpose = "password_reset"
+
+        return otp_service.send_otp(otp_request)
+
+    def reset_password_with_otp(
+        self, 
+        identifier: str, 
+        otp_code: str, 
+        new_password: str, 
+        otp_type: str = "EMAIL"
+    ) -> Dict[str, Any]:
+        """Reset password using OTP verification."""
+        # Verify OTP first
+        from service.otp_service import OTPService
+        otp_service = OTPService(self.db)
+
+        otp_request = type('OtpRequest', (), {})()
+        if "@" in identifier:
+            otp_request.email = identifier
+            otp_request.phone = None
+        else:
+            otp_request.email = None
+            otp_request.phone = identifier
+            
+        otp_request.otp_code = otp_code
+        otp_request.otp_type = otp_type
+        otp_request.purpose = "password_reset"
+
+        otp_result = otp_service.verify_otp(otp_request)
+
+        if not otp_result["verified"]:
+            raise ValueError(otp_result["message"])
+
+        # Find user by identifier
+        if "@" in identifier:
+            user = self.get_user_by_email(identifier)
+        else:
+            user = self.db.query(User).filter(User.phone == identifier).first()
+
+        if not user:
+            raise ValueError("User not found.")
+
+        # Validate new password
+        valid, errors = self.validate_password(new_password)
+        if not valid:
+            raise ValueError("; ".join(errors))
+
+        # Update password
+        user.hashed_password = self.get_password_hash(new_password)
+        user.password_reset_token = None
+        user.password_reset_expires = None
+        self.db.commit()
+
+        # Invalidate all sessions
+        self.logout_all(user.id)
+
+        return {
+            "success": True,
+            "message": "Password has been reset successfully. Please login with your new password."
+        }
+
     # ==================== Role-Based Access Helpers ====================
-    
+
     @staticmethod
     def require_role(*allowed_roles: UserRole):
         """Decorator/dependency factory for role-based access."""
@@ -466,12 +580,12 @@ class AuthService:
                 return False
             return user.role in allowed_roles
         return check_role
-    
+
     @staticmethod
     def is_admin(user: User) -> bool:
         """Check if user is admin."""
         return user is not None and user.role == UserRole.ADMIN
-    
+
     @staticmethod
     def is_staff_or_admin(user: User) -> bool:
         """Check if user is staff or admin."""

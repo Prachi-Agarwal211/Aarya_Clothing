@@ -841,6 +841,220 @@ function OTPVerification({ identifier, onVerified, onResend }) {
 export default OTPVerification;
 ```
 
+### Role Management
+
+```javascript
+// Role Management Service
+class RoleService {
+  constructor() {
+    this.baseURL = 'http://localhost:8001';
+  }
+
+  async updateUserRole(userId, newRole) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/v1/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to update user role');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Update role error:', error);
+      throw error;
+    }
+  }
+
+  async getUsersByRole(role, skip = 0, limit = 100) {
+    try {
+      const response = await fetch(
+        `${this.baseURL}/api/v1/admin/users/role/${role}?skip=${skip}&limit=${limit}`,
+        {
+          credentials: 'include'
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to fetch users by role');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get users by role error:', error);
+      throw error;
+    }
+  }
+}
+
+export const roleService = new RoleService();
+```
+
+### Role Management Component
+
+```jsx
+// UserRoleManager.jsx
+import { useState } from 'react';
+import { roleService } from './roleService';
+
+function UserRoleManager({ user, onRoleUpdated }) {
+  const [selectedRole, setSelectedRole] = useState(user.role);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const roles = [
+    { value: 'CUSTOMER', label: 'Customer' },
+    { value: 'STAFF', label: 'Staff' },
+    { value: 'ADMIN', label: 'Admin' }
+  ];
+
+  const handleRoleChange = async (newRole) => {
+    if (newRole === user.role) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const updatedUser = await roleService.updateUserRole(user.id, newRole);
+      setSelectedRole(newRole);
+      onRoleUpdated(updatedUser);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="role-manager">
+      <h4>Role Management</h4>
+      <div className="user-info">
+        <span><strong>User:</strong> {user.username}</span>
+        <span><strong>Current Role:</strong> {user.role}</span>
+      </div>
+      
+      <div className="role-selector">
+        <label>Change Role:</label>
+        <select
+          value={selectedRole}
+          onChange={(e) => handleRoleChange(e.target.value)}
+          disabled={loading}
+        >
+          {roles.map(role => (
+            <option key={role.value} value={role.value}>
+              {role.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {error && <div className="error">{error}</div>}
+      {loading && <div className="loading">Updating role...</div>}
+    </div>
+  );
+}
+
+export default UserRoleManager;
+```
+
+### Users by Role Component
+
+```jsx
+// UsersByRole.jsx
+import { useState, useEffect } from 'react';
+import { roleService } from './roleService';
+
+function UsersByRole() {
+  const [users, setUsers] = useState([]);
+  const [selectedRole, setSelectedRole] = useState('CUSTOMER');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const roles = [
+    { value: 'CUSTOMER', label: 'Customers' },
+    { value: 'STAFF', label: 'Staff Members' },
+    { value: 'ADMIN', label: 'Administrators' }
+  ];
+
+  useEffect(() => {
+    loadUsers();
+  }, [selectedRole]);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await roleService.getUsersByRole(selectedRole);
+      setUsers(response.users || []);
+    } catch (error) {
+      setError(error.message);
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="users-by-role">
+      <h3>Users by Role</h3>
+      
+      <div className="role-tabs">
+        {roles.map(role => (
+          <button
+            key={role.value}
+            className={`tab ${selectedRole === role.value ? 'active' : ''}`}
+            onClick={() => setSelectedRole(role.value)}
+          >
+            {role.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div className="loading">Loading users...</div>}
+      {error && <div className="error">{error}</div>}
+
+      <div className="users-list">
+        {users.map(user => (
+          <div key={user.id} className="user-card">
+            <div className="user-info">
+              <h4>{user.username}</h4>
+              <p>{user.email}</p>
+              <p><strong>Full Name:</strong> {user.full_name}</p>
+              <p><strong>Role:</strong> <span className="role-badge">{user.role}</span></p>
+              <p><strong>Status:</strong> 
+                <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
+                  {user.is_active ? 'Active' : 'Inactive'}
+                </span>
+              </p>
+            </div>
+            
+            <UserRoleManager 
+              user={user} 
+              onRoleUpdated={(updatedUser) => {
+                setUsers(users.map(u => 
+                  u.id === updatedUser.id ? updatedUser : u
+                ));
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default UsersByRole;
+```
+
 ---
 
 ## 🔒 Protected Routes

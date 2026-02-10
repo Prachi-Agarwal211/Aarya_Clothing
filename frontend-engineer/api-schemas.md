@@ -42,6 +42,7 @@ interface UserCreate {
   password: string;        // Required, min 8 chars
   full_name?: string;      // Optional, max 100 chars
   phone?: string;          // Optional, valid phone format
+  role?: UserRole;         // Optional (admin only), defaults to CUSTOMER
 }
 ```
 
@@ -53,12 +54,20 @@ interface UserResponse {
   username: string;
   full_name?: string;
   phone?: string;
+  role: UserRole;          // New: User role (ADMIN, STAFF, CUSTOMER)
   is_active: boolean;
-  is_verified: boolean;
-  is_admin: boolean;
+  email_verified: boolean;
+  phone_verified: boolean;
+  is_admin: boolean;      // Backward compatibility
   created_at: string;      // ISO 8601 datetime
   updated_at: string;      // ISO 8601 datetime
   last_login?: string;     // ISO 8601 datetime
+}
+
+enum UserRole {
+  ADMIN = "admin";
+  STAFF = "staff";
+  CUSTOMER = "customer";
 }
 ```
 
@@ -524,7 +533,44 @@ enum RefundStatus {
 
 ---
 
-## 💝 Wishlist Schemas
+## � Role Management Schemas
+
+### Update User Role
+
+**Request:**
+```typescript
+interface RoleUpdateRequest {
+  role: UserRole;           // New role to assign
+}
+```
+
+**Response:**
+```typescript
+interface RoleUpdateResponse extends UserResponse {
+  // Same as UserResponse with updated role
+}
+```
+
+### List Users by Role
+
+**Parameters:**
+- `role`: UserRole (ADMIN, STAFF, CUSTOMER)
+- `skip`: number (default: 0)
+- `limit`: number (default: 100)
+
+**Response:**
+```typescript
+interface UsersByRoleResponse {
+  users: UserResponse[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+```
+
+---
+
+## �💝 Wishlist Schemas
 
 ### Wishlist Item
 

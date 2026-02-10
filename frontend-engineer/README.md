@@ -42,6 +42,7 @@ Our backend consists of three main microservices:
 We use a **dual authentication system** with:
 - **JWT Tokens** (Access + Refresh)
 - **Cookie-based Sessions** (24-hour login persistence)
+- **Role-based Access Control** (Admin, Staff, Customer)
 
 ### Authentication Flow
 
@@ -162,6 +163,8 @@ fetch('/api/v1/users/me', {
 | GET | `/api/v1/admin/users` | List all users | ✅ Admin |
 | PATCH | `/api/v1/admin/users/{user_id}/activate` | Activate user | ✅ Admin |
 | PATCH | `/api/v1/admin/users/{user_id}/deactivate` | Deactivate user | ✅ Admin |
+| PATCH | `/api/v1/admin/users/{user_id}/role` | Update user role | ✅ Admin |
+| GET | `/api/v1/admin/users/role/{role}` | List users by role | ✅ Admin |
 
 ### Categories (Commerce Service)
 
