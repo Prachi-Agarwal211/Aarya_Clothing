@@ -1,9 +1,7 @@
 """Payment models for payment service."""
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Numeric, Text, Boolean, JSON
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from database.database import Base
 
 
 class PaymentTransaction(Base):

@@ -52,6 +52,30 @@ services:
     restart: unless-stopped
 
   # ============================================================
+  # FULL-TEXT SEARCH ENGINE
+  # ============================================================
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: aarya_meilisearch
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-aarya_meili_master_key_change_in_prod}
+      - MEILI_ENV=${MEILI_ENV:-development}
+      - MEILI_DB_PATH=/meili_data
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend_network
+    restart: unless-stopped
+
+  # ============================================================
   # CORE PLATFORM SERVICE (Port 8001)
   # User Management + Authentication + Sessions
   # ============================================================
@@ -148,10 +172,15 @@ services:
       # JWT Verification (shared with Core)
       - SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key}
       - ALGORITHM=HS256
+      # Meilisearch
+      - MEILI_URL=http://meilisearch:7700
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-aarya_meili_master_key_change_in_prod}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      meilisearch:
         condition: service_healthy
       core:
         condition: service_started
@@ -187,6 +216,46 @@ services:
       - MAX_RETRY_ATTEMPTS=3
       - PAYMENT_SUCCESS_URL=${PAYMENT_SUCCESS_URL:-https://aaryaclothing.cloud/payment/success}
       - PAYMENT_FAILURE_URL=${PAYMENT_FAILURE_URL:-https://aaryaclothing.cloud/payment/failure}
+      - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
+    networks:
+      - backend_network
+    restart: unless-stopped
+
+  # ============================================================
+  # ADMIN & STAFF SERVICE (Port 8004)
+  # Dashboard + Analytics + Inventory Ops + Chat + Landing Config
+  # ============================================================
+
+  admin:
+    build:
+      context: ./services/admin
+      dockerfile: Dockerfile
+    container_name: aarya_admin
+    environment:
+      - SERVICE_NAME=admin
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-change_this_password_in_production}@postgres:5432/aarya_clothing
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key}
+      - ALGORITHM=HS256
+      - CORE_SERVICE_URL=http://core:8001
+      - COMMERCE_SERVICE_URL=http://commerce:8002
+      - PAYMENT_SERVICE_URL=http://payment:8003
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-aarya-clothing-images}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
+      - R2_REGION=${R2_REGION:-auto}
       - ALLOWED_ORIGINS=["https://aaryaclothing.cloud","https://www.aaryaclothing.cloud"]
       - DEBUG=false
       - LOG_LEVEL=INFO
@@ -239,6 +308,7 @@ services:
       - core
       - commerce
       - payment
+      - admin
     networks:
       - frontend_network
       - backend_network
@@ -263,4 +333,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  meilisearch_data:
     driver: local

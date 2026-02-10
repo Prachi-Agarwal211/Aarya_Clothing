@@ -136,25 +136,6 @@ def clear_auth_cookies(response: Response):
     response.delete_cookie("session_id", path="/")
 
 
-# ==================== FastAPI App ====================
-
-app = FastAPI(
-    title="Aarya Clothing - Core Platform",
-    description="User Management, Authentication, Cookie Sessions, OTP Verification",
-    version="1.0.0",
-    lifespan=lifespan
-)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 # ==================== Health Check ====================
 
 @app.get("/health", tags=["Health"])
@@ -174,6 +155,78 @@ async def health_check():
 
 
 # ==================== Authentication Routes ====================
+
+@app.post("/api/v1/auth/forgot-password-otp", status_code=status.HTTP_200_OK,
+          tags=["Authentication"])
+async def forgot_password_otp(
+    identifier: str,
+    otp_type: str = "EMAIL",
+    db: Session = Depends(get_db)
+):
+    """
+    Request password reset OTP (Email or WhatsApp).
+    
+    Args:
+        identifier: Email address or phone number
+        otp_type: 'EMAIL' or 'WHATSAPP'
+    
+    Returns:
+        Success message
+    """
+    auth_service = AuthService(db)
+    
+    try:
+        result = auth_service.request_password_reset_otp(identifier, otp_type)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@app.post("/api/v1/auth/reset-password-otp", status_code=status.HTTP_200_OK,
+          tags=["Authentication"])
+async def reset_password_otp(
+    identifier: str,
+    otp_code: str,
+    new_password: str,
+    otp_type: str = "EMAIL",
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using OTP verification.
+    
+    Args:
+        identifier: Email address or phone number
+        otp_code: 6-digit OTP code
+        new_password: New password
+        otp_type: 'EMAIL' or 'WHATSAPP'
+    
+    Returns:
+        Success message
+    """
+    auth_service = AuthService(db)
+    
+    try:
+        result = auth_service.reset_password_with_otp(
+            identifier=identifier,
+            otp_code=otp_code,
+            new_password=new_password,
+            otp_type=otp_type
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password"
+        )
+
 
 @app.post("/api/v1/auth/register", response_model=UserResponse, 
           status_code=status.HTTP_201_CREATED,

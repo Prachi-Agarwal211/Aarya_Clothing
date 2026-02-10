@@ -1,20 +1,6 @@
-# Frontend Engineer Guide - Aarya Clothing Backend
+# Aarya Clothing - API Documentation
 
-Welcome to the Aarya Clothing backend documentation! This guide provides everything you need to know about our backend services, APIs, and authentication system to build a frontend application.
-
-## 📋 Table of Contents
-
-1. [System Overview](#system-overview)
-2. [Authentication System](#authentication-system)
-3. [API Endpoints](#api-endpoints)
-4. [Environment Setup](#environment-setup)
-5. [Error Handling](#error-handling)
-6. [Rate Limiting](#rate-limiting)
-7. [Testing](#testing)
-
----
-
-## 🏗️ System Overview
+## System Overview
 
 ### Microservices Architecture
 
@@ -33,9 +19,7 @@ Our backend consists of three main microservices:
 - **Reverse Proxy**: Nginx
 - **Containerization**: Docker & Docker Compose
 
----
-
-## 🔐 Authentication System
+## Authentication System
 
 ### Overview
 
@@ -139,9 +123,7 @@ fetch('/api/v1/users/me', {
 });
 ```
 
----
-
-## 🚀 API Endpoints
+## API Endpoints
 
 ### Base URLs
 - **Core**: `http://localhost:8001`
@@ -231,59 +213,215 @@ fetch('/api/v1/users/me', {
 | GET | `/api/v1/payments/methods` | Get payment methods | ❌ |
 | GET | `/api/v1/payments/history` | Get transaction history | ✅ |
 
----
+## API Schema Definitions
 
-## ⚙️ Environment Setup
+### Common Types
 
-### Local Development
+```typescript
+interface SuccessResponse<T> {
+  data: T;
+  message?: string;
+  status: 'success';
+}
 
-1. **Start Backend Services**:
-   ```bash
-   docker-compose up -d postgres redis core commerce payment
-   ```
+interface ErrorResponse {
+  detail: string | string[];
+  status_code: number;
+  error_type?: string;
+}
 
-2. **Environment Variables** (create `.env`):
-   ```env
-   # Database
-   POSTGRES_PASSWORD=your_password
-   
-   # JWT
-   JWT_SECRET_KEY=your_secret_key
-   
-   # Email (for OTP)
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=587
-   SMTP_USER=your_email@gmail.com
-   SMTP_PASSWORD=your_app_password
-   
-   # Razorpay (for payments)
-   RAZORPAY_KEY_ID=your_razorpay_key
-   RAZORPAY_KEY_SECRET=your_razorpay_secret
-   ```
-
-### Frontend Configuration
-
-For your frontend application, configure these base URLs:
-
-```javascript
-// Development
-const API_BASE_URLS = {
-  core: 'http://localhost:8001',
-  commerce: 'http://localhost:8010',
-  payment: 'http://localhost:8020'
-};
-
-// Production (when backend is deployed)
-const API_BASE_URLS = {
-  core: 'https://aaryaclothing.cloud/api/core',
-  commerce: 'https://aaryaclothing.cloud/api/commerce',
-  payment: 'https://aaryaclothing.cloud/api/payment'
-};
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  skip: number;
+  limit: number;
+  has_more: boolean;
+}
 ```
 
----
+### User Registration
 
-## 🚨 Error Handling
+**Request:**
+```typescript
+interface UserCreate {
+  email: string;           // Required, valid email
+  username: string;        // Required, unique, 3-50 chars
+  password: string;        // Required, min 8 chars
+  full_name?: string;      // Optional, max 100 chars
+  phone?: string;          // Optional, valid phone format
+  role?: UserRole;         // Optional (admin only), defaults to CUSTOMER
+}
+```
+
+**Response:**
+```typescript
+interface UserResponse {
+  id: number;
+  email: string;
+  username: string;
+  full_name?: string;
+  phone?: string;
+  role: UserRole;          // New: User role (ADMIN, STAFF, CUSTOMER)
+  is_active: boolean;
+  email_verified: boolean;
+  phone_verified: boolean;
+  is_admin: boolean;      // Backward compatibility
+  created_at: string;      // ISO 8601 datetime
+  updated_at: string;      // ISO 8601 datetime
+  last_login?: string;     // ISO 8601 datetime
+}
+
+enum UserRole {
+  ADMIN = "admin";
+  STAFF = "staff";
+  CUSTOMER = "customer";
+}
+```
+
+### Login
+
+**Request:**
+```typescript
+interface LoginRequest {
+  username: string;        // Email or username
+  password: string;        // User password
+  remember_me?: boolean;   // Optional, defaults to false
+}
+```
+
+**Response:**
+```typescript
+interface LoginResponse {
+  user: UserResponse;
+  tokens: Token;
+  session_id: string;
+}
+
+interface Token {
+  access_token: string;
+  refresh_token: string;
+  token_type: 'bearer';
+  expires_in: number;      // Seconds until expiry
+}
+```
+
+### Product Response
+
+```typescript
+interface ProductResponse {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;           // Decimal with 2 places
+  compare_price?: number;  // MRP/original price
+  sku: string;
+  barcode?: string;
+  track_inventory: boolean;
+  weight?: number;
+  category_id: number;
+  category?: CategoryResponse;
+  images: ProductImage[];
+  total_stock: number;
+  is_active: boolean;
+  is_featured: boolean;
+  is_new_arrival: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProductDetailResponse extends ProductResponse {
+  variants?: ProductVariant[];
+  seo_title?: string;
+  seo_description?: string;
+  tags?: string[];
+}
+
+interface ProductImage {
+  id: number;
+  product_id: number;
+  image_url: string;
+  alt_text?: string;
+  is_primary: boolean;
+  display_order: number;
+  created_at: string;
+}
+
+interface ProductVariant {
+  id: number;
+  product_id: number;
+  sku: string;
+  price: number;
+  compare_price?: number;
+  weight?: number;
+  inventory: number;
+  options: {
+    size?: string;
+    color?: string;
+    material?: string;
+    [key: string]: string | undefined;
+  };
+}
+```
+
+### Order Response
+
+```typescript
+interface OrderResponse {
+  id: number;
+  user_id: number;
+  order_number: string;
+  status: OrderStatus;
+  total_amount: number;
+  subtotal: number;
+  tax_amount: number;
+  shipping_amount: number;
+  discount_amount: number;
+  currency: string;
+  items: OrderItem[];
+  shipping_address: AddressResponse;
+  billing_address?: AddressResponse;
+  payment_status: PaymentStatus;
+  payment_method?: string;
+  transaction_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  shipped_at?: string;
+  delivered_at?: string;
+}
+
+interface OrderItem {
+  id: number;
+  order_id: number;
+  product_id: number;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  price: number;
+  total: number;
+  product?: ProductResponse;
+}
+
+enum OrderStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  PROCESSING = 'processing',
+  SHIPPED = 'shipped',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+  REFUNDED = 'refunded'
+}
+
+enum PaymentStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  REFUNDED = 'refunded'
+}
+```
+
+## Error Handling
 
 ### Standard Error Response Format
 
@@ -331,9 +469,7 @@ const API_BASE_URLS = {
 }
 ```
 
----
-
-## ⏱️ Rate Limiting
+## Rate Limiting
 
 ### Authentication Endpoints
 
@@ -359,9 +495,7 @@ X-RateLimit-Remaining: 95
 X-RateLimit-Reset: 1640995200
 ```
 
----
-
-## 🧪 Testing
+## Testing
 
 ### Health Checks
 
@@ -371,7 +505,7 @@ Test each service is running:
 # Core Service
 curl http://localhost:8001/health
 
-# Commerce Service  
+# Commerce Service
 curl http://localhost:8010/health
 
 # Payment Service
@@ -406,9 +540,7 @@ curl -X GET http://localhost:8001/api/v1/users/me \
   -b cookies.txt
 ```
 
----
-
-## 📞 Support
+## Support
 
 If you encounter any issues or have questions:
 
@@ -416,15 +548,3 @@ If you encounter any issues or have questions:
 2. Review the error messages carefully
 3. Ensure proper authentication headers/cookies
 4. Verify rate limits haven't been exceeded
-
----
-
-## 🔄 Next Steps
-
-1. **Set up your development environment** using the environment setup guide
-2. **Implement authentication** in your frontend using the provided endpoints
-3. **Integrate commerce features** (products, cart, orders)
-4. **Add payment processing** using Razorpay integration
-5. **Test thoroughly** using the provided testing examples
-
-Happy coding! 🚀

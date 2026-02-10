@@ -1,4 +1,4 @@
-"""Authentication middleware for Commerce service."""
+"""Authentication middleware for Admin service — admin/staff only."""
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt
@@ -12,10 +12,7 @@ security = HTTPBearer()
 async def verify_jwt_token(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> dict:
-    """
-    Verify JWT token from Core service.
-    Shared secret with Core service for verification.
-    """
+    """Verify JWT token from Core service."""
     token = credentials.credentials
     
     try:
@@ -39,11 +36,7 @@ async def verify_jwt_token(
 
 
 async def get_current_user(token_data: dict = Depends(verify_jwt_token)) -> dict:
-    """
-    Get current authenticated user from token.
-    Returns user data from JWT payload.
-    """
-    # Core service encodes user ID as "sub" in the JWT payload
+    """Get current authenticated user from token."""
     user_id = token_data.get("sub")
     if not user_id:
         raise HTTPException(
@@ -60,23 +53,17 @@ async def get_current_user(token_data: dict = Depends(verify_jwt_token)) -> dict
 
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    """
-    Require admin or staff role for endpoint access.
-    Raises 403 if user is a regular customer.
-    """
-    if user.get("role") not in ["admin", "staff"]:
+    """Require admin role — full dashboard access."""
+    if user.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin or staff access required"
+            detail="Admin access required"
         )
     return user
 
 
 async def require_staff(user: dict = Depends(get_current_user)) -> dict:
-    """
-    Require staff or admin role for endpoint access.
-    Raises 403 if user is regular customer.
-    """
+    """Require staff or admin role — inventory & order operations."""
     if user.get("role") not in ["admin", "staff"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -85,33 +72,11 @@ async def require_staff(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
-# Optional authentication (allows both authenticated and anonymous)
-async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
-) -> Optional[dict]:
-    """
-    Get current user if authenticated, None otherwise.
-    Useful for endpoints that work for both authenticated and anonymous users.
-    """
-    if not credentials:
-        return None
-    
-    try:
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM]
+async def require_admin_or_staff(user: dict = Depends(get_current_user)) -> dict:
+    """Alias for require_staff — admin or staff role."""
+    if user.get("role") not in ["admin", "staff"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or staff access required"
         )
-        
-        user_id = payload.get("sub")
-        if not user_id:
-            return None
-        
-        return {
-            "user_id": user_id,
-            "username": payload.get("username"),
-            "email": payload.get("email"),
-            "role": payload.get("role", "customer"),
-        }
-    except Exception:
-        return None
+    return user

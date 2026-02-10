@@ -1,13 +1,7 @@
-# Aarya Clothing - VPS Deployment Guide
+# Aarya Clothing - Deployment Guide
 
 ## Overview
-Complete deployment guide for Aarya Clothing e-commerce platform on VPS 72.61.255.8 with domain aaryaclothing.cloud
-
-## Prerequisites
-- VPS with Docker and Docker Compose installed
-- Domain aaryaclothing.cloud pointing to 72.61.255.8
-- SSH access to VPS
-- Root or sudo privileges
+Complete deployment guide for Aarya Clothing e-commerce platform with microservices architecture.
 
 ## Architecture
 ```
@@ -23,7 +17,7 @@ Internet → Nginx (443/80) → Frontend (3000)
 
 ### 1. SSH into your VPS
 ```bash
-ssh root@72.61.255.8
+ssh root@your-vps-ip
 ```
 
 ### 2. Navigate to project directory
@@ -44,13 +38,13 @@ nano .env
 
 ### 4. Make deployment scripts executable
 ```bash
-chmod +x setup-ssl.sh
-chmod +x deploy-vps.sh
+chmod +x quick-deploy-vps.sh
+chmod +x health-check.sh
 ```
 
 ### 5. Run deployment
 ```bash
-./deploy-vps.sh
+./quick-deploy-vps.sh
 ```
 
 ## Manual Deployment Steps
@@ -59,12 +53,27 @@ If you prefer manual deployment:
 
 ### Step 1: Generate SSL Certificates
 ```bash
-./setup-ssl.sh
+# For self-signed certificates (testing only)
+mkdir -p docker/nginx/ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout docker/nginx/ssl/aaryaclothing.cloud.key \
+    -out docker/nginx/ssl/aaryaclothing.cloud.crt \
+    -subj "/C=US/ST=State/L=City/O=Organization/CN=aaryaclothing.cloud"
 ```
 
-This creates:
-- `docker/nginx/ssl/aaryaclothing.cloud.crt`
-- `docker/nginx/ssl/aaryaclothing.cloud.key`
+For production SSL with Let's Encrypt:
+```bash
+# Install certbot
+apt-get update
+apt-get install certbot
+
+# Generate certificates
+certbot certonly --standalone -d aaryaclothing.cloud -d www.aaryaclothing.cloud
+
+# Copy certificates to nginx ssl directory
+cp /etc/letsencrypt/live/aaryaclothing.cloud/fullchain.pem docker/nginx/ssl/aaryaclothing.cloud.crt
+cp /etc/letsencrypt/live/aaryaclothing.cloud/privkey.pem docker/nginx/ssl/aaryaclothing.cloud.key
+```
 
 ### Step 2: Stop Existing Containers
 ```bash
@@ -120,29 +129,13 @@ After successful deployment:
 ## SSL Certificate Notes
 
 ### Self-Signed Certificates (Current Setup)
-- Generated automatically by `setup-ssl.sh`
+- Generated automatically by setup script
 - Valid for 365 days
 - Browser will show security warning (normal for self-signed)
 - Accept the warning to proceed
 
 ### Production SSL (Recommended)
-For production, use Let's Encrypt:
-
-```bash
-# Install certbot
-apt-get update
-apt-get install certbot
-
-# Generate certificates
-certbot certonly --standalone -d aaryaclothing.cloud -d www.aaryaclothing.cloud
-
-# Copy certificates to nginx ssl directory
-cp /etc/letsencrypt/live/aaryaclothing.cloud/fullchain.pem docker/nginx/ssl/aaryaclothing.cloud.crt
-cp /etc/letsencrypt/live/aaryaclothing.cloud/privkey.pem docker/nginx/ssl/aaryaclothing.cloud.key
-
-# Restart nginx
-docker-compose restart nginx
-```
+For production, use Let's Encrypt as shown in Step 1.
 
 ## Firewall Configuration
 
@@ -247,7 +240,7 @@ docker exec -it aarya_nginx nginx -s reload
 openssl x509 -in docker/nginx/ssl/aaryaclothing.cloud.crt -text -noout
 
 # Regenerate certificates
-./setup-ssl.sh
+# Follow steps from SSL Certificate section above
 docker-compose restart nginx
 ```
 
@@ -326,7 +319,7 @@ For issues or questions:
 
 ## Deployment Checklist
 
-- [ ] Domain aaryaclothing.cloud points to 72.61.255.8
+- [ ] Domain aaryaclothing.cloud points to VPS IP
 - [ ] .env file configured with production values
 - [ ] SSL certificates generated
 - [ ] Docker and Docker Compose installed
@@ -350,6 +343,4 @@ For issues or questions:
 
 ---
 
-**Deployment Date**: 2026-02-09
-**VPS IP**: 72.61.255.8
-**Domain**: aaryaclothing.cloud
+**Deployment Date**: 2026-02-10

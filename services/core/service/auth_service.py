@@ -331,16 +331,19 @@ class AuthService:
                 )
             
             db = SessionLocal()
-            user = db.query(User).filter(User.id == user_id).first()
-            
-            if not user or not user.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="User not found or inactive",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-            
-            return user
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                
+                if not user or not user.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="User not found or inactive",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+                
+                return user
+            finally:
+                db.close()
         
         except JWTError:
             raise HTTPException(

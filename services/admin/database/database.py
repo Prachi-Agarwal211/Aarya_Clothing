@@ -1,4 +1,4 @@
-"""Database connection for commerce service."""
+"""Database connection for admin service."""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from core.config import settings
@@ -12,10 +12,12 @@ engine = create_engine(
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
 
-def get_db() -> Session:
+def get_db():
+    """Get database session."""
     db = SessionLocal()
     try:
         yield db
@@ -24,6 +26,5 @@ def get_db() -> Session:
 
 
 def init_db():
-    from models.product import Product
-    from models.order import Order, OrderItem
+    """Initialize database tables."""
     Base.metadata.create_all(bind=engine)

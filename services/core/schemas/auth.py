@@ -2,14 +2,7 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
-from enum import Enum
-
-
-class UserRole(str, Enum):
-    """User role enumeration."""
-    ADMIN = "admin"
-    STAFF = "staff"
-    CUSTOMER = "customer"
+from models.user import UserRole
 
 
 # ==================== User Schemas ====================
@@ -34,7 +27,7 @@ class UserResponse(UserBase):
     role: UserRole
     is_active: bool
     email_verified: bool
-    phone_verified: Optional[str] = None
+    phone_verified: bool = False
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime] = None

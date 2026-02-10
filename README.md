@@ -1,6 +1,6 @@
 # Aarya Clothing - E-Commerce Platform
 
-A modern, scalable e-commerce platform for women's clothing built with microservices architecture. Features include user authentication, product catalog, shopping cart, order management, and secure payment processing.
+A modern, scalable e-commerce platform for women's clothing built with microservices architecture. Features include user authentication, product catalog, shopping cart, order management, admin dashboard, staff operations, customer support chat, and secure payment processing.
 
 ## 🚀 Quick Start
 
@@ -27,226 +27,255 @@ docker-compose ps
 ```
 
 ### Access Points
-- **Frontend**: http://localhost:3000
-- **Core API**: http://localhost:8001 (Authentication & Users)
-- **Commerce API**: http://localhost:8010 (Products & Orders)
-- **Payment API**: http://localhost:8020 (Payment Processing)
-- **API Documentation**: http://localhost:8001/docs
+| Service | URL | Description |
+|---------|-----|-------------|
+| Frontend | http://localhost:3000 | Next.js application |
+| Core API | http://localhost:8001/docs | Auth & Users |
+| Commerce API | http://localhost:8010/docs | Products, Cart, Orders |
+| Payment API | http://localhost:8020/docs | Payment Processing |
+| Admin API | http://localhost:8004/docs | Dashboard, Analytics, Chat |
+| Meilisearch | http://localhost:7700 | Full-text search engine |
+| PostgreSQL | localhost:5432 | Primary database |
+| Redis | localhost:6379 | Cache & sessions |
 
 ## 🏗️ Architecture
 
 ### Microservices Design
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      FRONTEND (Next.js)                      │
-│                       Port 3000                              │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-        ┌─────────────┼─────────────┐
-        ▼             ▼             ▼
-┌───────────┐  ┌───────────┐  ┌───────────┐
-│   CORE    │  │ COMMERCE  │  │  PAYMENT  │
-│ Port 8001 │  │ Port 8010 │  │ Port 8020 │
-│  Auth &   │  │ Products  │  │ Razorpay  │
-│  Users    │  │ Cart/Ord  │  │  Stripe   │
-└─────┬─────┘  └─────┬─────┘  └─────┬─────┘
-      │              │              │
-      └──────────────┼──────────────┘
-                     │
-        ┌────────────┴────────────┐
-        ▼                         ▼
-  ┌───────────┐            ┌───────────┐
-  │ PostgreSQL│            │   Redis   │
-  │  Port 5432│            │  Port 6379│
-  └───────────┘            └───────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (Next.js)                        │
+│                          Port 3000                                │
+└──────────────┬──────────────────┬─────────────────┬──────────────┘
+               │                  │                 │
+    ┌──────────▼──────┐  ┌───────▼───────┐  ┌─────▼──────────┐
+    │   CORE SERVICE  │  │   COMMERCE    │  │ PAYMENT SERVICE│
+    │   Port 8001     │  │   Port 8010   │  │   Port 8020    │
+    │  Auth & Users   │  │ Products/Cart │  │  Razorpay      │
+    │  Sessions/OTP   │  │ Orders/Search │  │  Stripe        │
+    └────────┬────────┘  └───────┬───────┘  └──────┬─────────┘
+             │                   │                  │
+    ┌────────▼────────┐          │                  │
+    │  ADMIN SERVICE  │          │                  │
+    │   Port 8004     │          │                  │
+    │  Dashboard      │          │                  │
+    │  Analytics/Chat │          │                  │
+    └────────┬────────┘          │                  │
+             │                   │                  │
+    ┌────────┴───────────────────┴──────────────────┘
+    │
+    ├──►  PostgreSQL (5432)     ──  Primary database
+    ├──►  Redis (6379)          ──  Cache & sessions
+    └──►  Meilisearch (7700)    ──  Full-text search
 ```
 
 ### Technology Stack
 
-#### Frontend
-- **Next.js 16.1.6** - React framework with App Router
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first styling
-- **Lucide React** - Modern icon library
-- **AWS SDK** - S3 integration for assets
-- **Jose** - JWT token handling
-
-#### Backend Services
-- **FastAPI** - Modern Python web framework
-- **PostgreSQL** - Primary database
-- **Redis** - Caching and session storage
-- **SQLAlchemy** - ORM for database operations
-- **Pydantic** - Data validation and serialization
-
-#### Payment Processing
-- **Razorpay** - Primary payment gateway for India
-- **Stripe** - International payment support
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Frontend | Next.js, TypeScript, Tailwind CSS | UI framework |
+| Backend | FastAPI, SQLAlchemy, Pydantic | API services |
+| Database | PostgreSQL | Persistent storage |
+| Cache | Redis | Sessions, cart, real-time |
+| Search | Meilisearch | Product full-text search |
+| Payments | Razorpay, Stripe | Payment processing |
+| Infrastructure | Docker, Nginx | Deployment |
 
 ## 📁 Project Structure
 
 ```
 Aarya_Clothing/
-├── README.md                    # This file
-├── docker-compose.yml           # Docker orchestration
-├── .env.example                 # Environment template
-├── DEVELOPMENT_SETUP.md         # Detailed setup guide
-├── docs/                        # Documentation
-│   ├── architecture.md          # System architecture
-│   ├── deployment-guide.md      # Deployment instructions
-│   └── deployment-checklist.md # Production checklist
-├── frontend/                    # Next.js frontend
-│   ├── src/                     # Source code
-│   ├── package.json             # Dependencies
-│   └── Dockerfile               # Frontend container
-├── services/                    # Backend services
-│   ├── core/                    # Authentication service
-│   │   ├── main.py              # Application entry
-│   │   ├── requirements.txt     # Python dependencies
-│   │   └── Dockerfile           # Core service container
-│   ├── commerce/                # Product/order service
-│   │   ├── main.py              # Application entry
-│   │   ├── requirements.txt     # Python dependencies
-│   │   ├── MIGRATION.md         # Database migrations
-│   │   └── Dockerfile           # Commerce service container
-│   └── payment/                 # Payment processing
-│       ├── main.py              # Application entry
-│       ├── requirements.txt     # Python dependencies
-│       ├── README.md            # Payment service docs
-│       └── Dockerfile           # Payment service container
-├── docker/                      # Docker configurations
-│   ├── postgres/init.sql        # Database initialization
-│   └── redis/redis.conf         # Redis configuration
-└── tests/                       # Test suites
+├── README.md
+├── docker-compose.yml
+├── .env.example
+├── frontend/                        # Next.js frontend
+│   ├── src/
+│   ├── package.json
+│   └── Dockerfile
+├── services/
+│   ├── core/                        # Auth service (port 8001)
+│   │   ├── main.py
+│   │   ├── models/user.py
+│   │   ├── service/auth_service.py
+│   │   └── Dockerfile
+│   ├── commerce/                    # Commerce service (port 8010)
+│   │   ├── main.py
+│   │   ├── models/                  # Product, Order, Cart models
+│   │   ├── service/                 # Business logic services
+│   │   └── Dockerfile
+│   ├── payment/                     # Payment service (port 8020)
+│   │   ├── main.py
+│   │   ├── models/payment.py
+│   │   └── Dockerfile
+│   └── admin/                       # Admin service (port 8004)
+│       ├── main.py
+│       ├── models/                  # Chat, Landing, Analytics models
+│       ├── schemas/admin.py
+│       └── Dockerfile
+├── docker/
+│   ├── postgres/init.sql            # Database initialization
+│   ├── nginx/nginx.prod.conf        # Reverse proxy config
+│   └── redis/redis.conf
+└── tests/
+    ├── conftest.py                  # Pytest fixtures
+    ├── test_all_services.py         # Comprehensive test suite
+    └── run_mock_tests.py            # Standalone mock tests
 ```
 
 ## ✨ Features
 
-### 🛍️ E-Commerce Core
-- **Product Catalog** - Organized categories and product management
-- **Shopping Cart** - Real-time cart updates with Redis
-- **Order Management** - Complete order lifecycle tracking
-- **Inventory Management** - Stock tracking and variants
+### 🛍️ Customer Features
+- **Product Catalog** — Browse with sorting (price, name, popularity, newest) and advanced filtering
+- **Full-Text Search** — Meilisearch-powered typo-tolerant product search
+- **Shopping Cart** — Real-time cart with quantity updates, promo codes, shipping calculation
+- **Order Management** — Create, track, cancel orders with full history
+- **Wishlist** — Save products for later
+- **Reviews & Ratings** — Write and browse product reviews
+- **Returns & Exchanges** — Submit return/exchange requests
+- **Customer Support Chat** — Real-time chat with staff
+- **Customer Profile** — Order history, stats, saved addresses
 
-### 👤 User Management
-- **Secure Authentication** - JWT-based with refresh tokens
-- **User Profiles** - Complete user account management
-- **OTP Verification** - Email and phone verification
-- **Password Security** - Secure password handling and reset
+### 🔐 Authentication & Security
+- **JWT Authentication** — Secure token-based auth with refresh tokens
+- **OTP Verification** — Email and phone verification
+- **Password Reset** — Secure forgot-password flow
+- **Role-Based Access** — Customer, Staff, Admin roles
+- **Rate Limiting** — API endpoint protection
+- **CORS Protection** — Cross-origin request security
+
+### 📊 Admin Dashboard
+- **Dashboard Overview** — Revenue, orders, customers, inventory alerts
+- **Revenue Analytics** — Daily/monthly/yearly revenue reports
+- **Customer Analytics** — Growth metrics and top customers
+- **Product Analytics** — Top-selling products, performance data
+- **Order Management** — Bulk status updates, detailed order views
+- **User Management** — Search, activate/deactivate users
+- **Inventory Alerts** — Low-stock and out-of-stock notifications
+- **Chat Management** — Assign/manage customer support rooms
+- **Landing Page Config** — Dynamic homepage content management
+- **Export** — CSV export for orders and products
+
+### 👷 Staff Operations
+- **Inventory Management** — Add/adjust stock, bulk updates, movement history
+- **Order Processing** — Process, ship, and track orders
+- **Product Variants** — CRUD for sizes, colors, SKUs
+- **Task Management** — Assigned tasks with completion tracking
+- **Notifications** — Real-time alerts for inventory and orders
+- **Reports** — Inventory summary, processed orders report
 
 ### 💳 Payment Processing
-- **Multiple Gateways** - Razorpay (India) and Stripe (International)
-- **Secure Transactions** - PCI-compliant payment processing
-- **Refund Management** - Automated refund processing
-- **Payment History** - Complete transaction tracking
+- **Razorpay** — Primary payment gateway for India (UPI, Cards, Wallets)
+- **Stripe** — International payment support
+- **Refunds** — Automated refund processing
+- **Webhooks** — Payment event processing
+- **Transaction History** — Full payment audit trail
 
-### 🔧 Developer Experience
-- **API Documentation** - Auto-generated OpenAPI docs
-- **Health Checks** - Service monitoring endpoints
-- **Docker Support** - Containerized deployment
-- **Environment Management** - Comprehensive configuration
+## 📡 API Endpoints
 
-## 🔧 Development
+### Core Service (Port 8001)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/auth/register` | User registration |
+| POST | `/api/v1/auth/login` | Login with JWT |
+| POST | `/api/v1/auth/logout` | Logout & invalidate session |
+| POST | `/api/v1/auth/forgot-password` | Initiate password reset |
+| POST | `/api/v1/auth/reset-password` | Complete password reset |
+| GET | `/api/v1/users/me` | Current user profile |
 
-### Local Development Setup
+### Commerce Service (Port 8010)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/products/browse` | Browse with filters & sorting |
+| GET | `/api/v1/products/search` | Meilisearch full-text search |
+| GET | `/api/v1/products/slug/{slug}` | Get product by slug |
+| GET | `/api/v1/products/{id}/related` | Related products |
+| POST | `/api/v1/cart/{id}/add` | Add item to cart |
+| PUT | `/api/v1/cart/{id}/update-quantity` | Update cart quantity |
+| POST | `/api/v1/cart/{id}/apply-promo` | Apply promo code |
+| GET | `/api/v1/cart/{id}/summary` | Cart totals + shipping |
+| POST | `/api/v1/orders` | Create order |
+| GET | `/api/v1/me/profile` | Customer profile + stats |
+| POST | `/api/v1/chat/rooms` | Start support chat |
+| GET | `/api/v1/landing/featured` | Homepage content |
+| POST | `/api/v1/returns/{id}/exchange` | Exchange request |
 
-For detailed development instructions, see [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md).
+### Admin Service (Port 8004)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/admin/dashboard/overview` | Dashboard stats |
+| GET | `/api/v1/admin/analytics/revenue` | Revenue analytics |
+| GET | `/api/v1/admin/orders` | Manage all orders |
+| POST | `/api/v1/admin/orders/bulk-update` | Bulk status update |
+| GET | `/api/v1/admin/users` | User management |
+| GET | `/api/v1/admin/inventory/low-stock` | Low stock alerts |
+| POST | `/api/v1/admin/export/orders` | Export orders CSV |
+| GET | `/api/v1/staff/dashboard` | Staff dashboard |
+| POST | `/api/v1/staff/inventory/add-stock` | Add inventory |
+| POST | `/api/v1/staff/orders/{id}/ship` | Ship order |
 
-### Quick Development Commands
-```bash
-# Start databases only
-docker-compose up -d postgres redis
-
-# Start all services with local development
-start-local.bat  # Windows
-# or
-./start-local.sh  # Linux/Mac
-
-# Test connections
-test-connection.bat  # Windows
-# or
-./test-connection.sh  # Linux/Mac
-```
-
-### Service Ports
-| Service | Port | Description |
-|---------|------|-------------|
-| Frontend | 3000 | Next.js application |
-| Core API | 8001 | Authentication & users |
-| Commerce API | 8010 | Products, cart, orders |
-| Payment API | 8020 | Payment processing |
-| PostgreSQL | 5432 | Primary database |
-| Redis | 6379 | Cache & sessions |
-
-## 🚀 Deployment
-
-### Production Deployment
-For production deployment instructions, see:
-- [Deployment Guide](docs/deployment-guide.md)
-- [Deployment Checklist](docs/deployment-checklist.md)
-
-### Docker Production
-```bash
-# Build and start all services
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# Scale services if needed
-docker-compose -f docker-compose.prod.yml up -d --scale core=2 --scale commerce=2
-```
-
-## 📚 Documentation
-
-- **[Development Setup](DEVELOPMENT_SETUP.md)** - Complete development guide
-- **[Architecture](docs/architecture.md)** - System architecture and design
-- **[Payment Service](services/payment/README.md)** - Payment processing details
-- **[Commerce Migration](services/commerce/MIGRATION.md)** - Database migration guide
-
-## 🔒 Security
-
-- **JWT Authentication** - Secure token-based authentication
-- **Password Encryption** - Bcrypt hashing for passwords
-- **CORS Protection** - Cross-origin request security
-- **Input Validation** - Comprehensive data validation
-- **SQL Injection Prevention** - Parameterized queries
-- **Rate Limiting** - API endpoint protection
+### Payment Service (Port 8020)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/payments/create-order` | Create Razorpay order |
+| POST | `/api/v1/payments/verify` | Verify payment |
+| POST | `/api/v1/payments/refund` | Process refund |
+| POST | `/api/v1/payments/webhook` | Payment webhook |
 
 ## 🧪 Testing
 
-### Health Checks
+### Run All Tests
 ```bash
-# Test all services
-curl http://localhost:8001/health  # Core service
-curl http://localhost:8010/health  # Commerce service
-curl http://localhost:8020/health  # Payment service
+# Standalone mock tests (no dependencies)
+python tests/run_mock_tests.py
+
+# Full pytest suite
+cd tests && pip install -r requirements.txt && pytest -v
+
+# Individual service tests
+pytest tests/test_all_services.py -v -k "core"
+pytest tests/test_all_services.py -v -k "commerce"
+pytest tests/test_all_services.py -v -k "admin"
+pytest tests/test_all_services.py -v -k "payment"
 ```
 
-### API Testing
-All services expose interactive API documentation at:
-- Core: http://localhost:8001/docs
-- Commerce: http://localhost:8010/docs
-- Payment: http://localhost:8020/docs
+### Health Checks
+```bash
+curl http://localhost:8001/health   # Core
+curl http://localhost:8010/health   # Commerce
+curl http://localhost:8020/health   # Payment
+curl http://localhost:8004/health   # Admin
+```
 
-## 🤝 Contributing
+## 🚀 Deployment
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+### Production
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
 
-## 📄 License
+# Scale services
+docker-compose up -d --scale core=2 --scale commerce=2
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Environment Variables
+See [.env.example](.env.example) for required configuration.
 
-## 🆘 Support
+## 📚 Documentation
 
-For support:
-1. Check the [troubleshooting section](DEVELOPMENT_SETUP.md#troubleshooting)
-2. Review service logs: `docker-compose logs -f <service-name>`
-3. Check API documentation at `/docs` endpoints
-4. Open an issue with detailed information
+- [Development Setup](DEVELOPMENT_SETUP.md) — Local dev guide
+- [Architecture](docs/architecture.md) — System design
+- [Deployment Guide](docs/deployment-guide.md) — Production deployment
+- [Payment Service](services/payment/README.md) — Payment integration
 
-## 📊 Version History
+## 🔒 Security
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+- JWT Authentication with refresh tokens
+- Bcrypt password hashing
+- CORS protection & rate limiting
+- SQL injection prevention (parameterized queries)
+- Input validation with Pydantic
+- Secure HTTP-only cookies
 
 ---
 
-**Version**: 2.0.0  
-**Last Updated**: February 2026  
-**Compatible**: Python 3.11, Docker 29.2.0, Node.js 25.6.03e\udd1d Contributing\n\nContributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.\n\n## \ud83d\udcdd Changelog\n\nSee [CHANGELOG.md](CHANGELOG.md) for version history and updates.\n\n## \ud83d\udcc4 License\n\nThis project is licensed under the MIT License - see the LICENSE file for details.\n\n## \ud83c\udd98 Support\n\nFor support, please open an issue in the repository or contact the development team.\n\n## \ud83d\ude4f Acknowledgments\n\n- Built with [Next.js](https://nextjs.org/)\n- Backend powered by [FastAPI](https://fastapi.tiangolo.com/)\n- Payment processing by [Razorpay](https://razorpay.com/)\n- Icons by [Lucide](https://lucide.dev/)"]
+**Version**: 3.0.0
+**Last Updated**: February 2026
+**Compatible**: Python 3.11, Docker 29.2.0, Node.js 25.6.0
